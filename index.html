@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>Arabic Multimodal Collection</title>
+<title>Arabic Voice Collection</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Sans+Arabic:wght@400;500;600&family=Noto+Naskh+Arabic:wght@400;600&display=swap">
@@ -131,27 +131,6 @@ details summary{cursor:pointer;font-weight:500}
 .bar i{display:block;height:100%;background:var(--accent)}
 kbd{font:500 .75rem var(--f-ui);border:1px solid var(--line);border-bottom-width:2px;border-radius:4px;padding:0 5px}
 
-/* Pages */
-.slots{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
-@media (max-width:560px){.slots{grid-template-columns:1fr 1fr}}
-.slot{border:1.5px dashed var(--line);border-radius:8px;display:flex;flex-direction:column;min-width:0;background:var(--surface)}
-.slot.filled{border-style:solid;border-color:var(--ok)}
-.slot .img{aspect-ratio:3/4;background:var(--paper);display:grid;place-items:center;overflow:hidden;border-radius:7px 7px 0 0;color:var(--muted);font-size:.85rem}
-.slot img{width:100%;height:100%;object-fit:cover;max-width:100%}
-.slot .meta{display:flex;justify-content:space-between;align-items:center;padding:6px 8px 0;font-size:.85rem;gap:6px}
-.slot.filled .meta b{color:var(--ok)}
-.slot .acts{display:flex;gap:6px;padding:6px 8px 8px}
-.slot .acts .btn{flex:1;min-width:0}
-.btn.sm{padding:6px 10px;min-height:36px;font-size:.85rem}
-.scanrow{display:flex;gap:10px;flex-wrap:wrap;align-items:center;justify-content:space-between;border-top:1px solid var(--line);padding-top:14px}
-.thumbs{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:12px}
-.thumb{border:1px solid var(--line);border-radius:8px;overflow:hidden;background:var(--surface);display:flex;flex-direction:column}
-.thumb .img{aspect-ratio:3/4;background:var(--paper);display:grid;place-items:center;overflow:hidden}
-.thumb img{width:100%;height:100%;object-fit:cover;max-width:100%}
-.thumb .meta{display:flex;justify-content:space-between;align-items:center;padding:6px 8px;font-size:.8rem;gap:6px}
-.drop{border:1.5px dashed var(--muted);border-radius:var(--r);padding:22px;text-align:center;display:flex;flex-direction:column;gap:12px;align-items:center}
-.drop.over{background:var(--accent-soft);border-color:var(--accent)}
-
 .summary{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
 .summary div{border:1px solid var(--line);border-radius:8px;padding:12px}
 .summary b{display:block;font-size:1.3rem;font-variant-numeric:tabular-nums}
@@ -161,21 +140,30 @@ kbd{font:500 .75rem var(--f-ui);border:1px solid var(--line);border-bottom-width
 .modal{position:fixed;inset:0;background:rgba(10,15,20,.55);display:grid;place-items:center;padding:16px;z-index:20}
 .modal .card{max-width:440px;width:100%}
 .toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--ink);color:var(--paper);padding:10px 16px;border-radius:8px;font-size:.9rem;z-index:30;max-width:calc(100% - 32px)}
+.btn.sm{padding:6px 12px;min-height:38px;font-size:.88rem}
+a.btn{text-decoration:none;color:inherit}
+a.btn.primary{color:var(--accent-ink)}
+hr.sep{border:0;border-top:1px solid var(--line);margin:4px 0;width:100%}
+.dl{display:grid;grid-template-columns:auto 1fr;gap:8px 18px;margin:0}
+.dl dt{color:var(--muted);font-size:.9rem}
+.dl dd{margin:0;font-weight:500}
+.seg{flex-wrap:wrap}
+.summary b{font-size:1.1rem;overflow-wrap:anywhere}
 </style>
 </head>
 <body>
 <header class="top">
   <div class="top-row">
-    <div class="brand">Arabic Words &amp; Sentences<small>Speech and handwriting data collection</small></div>
+    <div class="brand">Arabic Words &amp; Sentences<small>Voice recording study</small></div>
+    <span id="sessChip" class="chip" hidden></span>
     <span id="pidChip" class="chip" hidden></span>
-        <button id="withdrawBtn" class="linkbtn" hidden>Stop and delete</button>
+    <button id="withdrawBtn" class="linkbtn" hidden>Stop and delete</button>
   </div>
   <ol class="steps" id="steps"></ol>
   <div class="steplabel" id="stepLabel"></div>
 </header>
 <main id="main"></main>
 <div id="modalRoot"></div>
-
 <script>/*!
 
 JSZip v3.10.1 - A JavaScript class for generating and reading zip files
@@ -195,34 +183,64 @@ https://github.com/nodeca/pako/blob/main/LICENSE
    CONFIGURATION — edit this block
    ============================================================ */
 const CONFIG = {
-  samplesPerItem: 10,              // voice recordings per word / sentence
-  formPages: 6,                    // pages in the printed handwriting form
-  // Optional: URL of your Google Apps Script web app (see setup guide).
-  // Leave "" and participants download a ZIP to hand in instead.
+  sessions: 3,                 // number of separate sessions (links)
+  wordReps: 3,                 // recordings of each word per session
+  sentenceReps: 1,             // recordings of each sentence per session
+  minWordGap: 5,               // a word never repeats within this many prompts
+  // URL of your Google Apps Script web app (see setup guide).
+  // Leave "" to have participants download a ZIP instead (useful for testing).
   submitUrl: "",
-  submitKey: "change-me",          // must match SUBMIT_KEY in the Apps Script
+  submitKey: "change-me",      // must match SUBMIT_KEY in the Apps Script
   minAge: 15, maxAge: 99,
-  maxWordSeconds: 10,
-  maxSentenceSeconds: 120,
-  investigator: { name: "Dr. Majid Ali Khan", email: "makhan@pmu.edu.sa" },
+  maxWordSeconds: 8,
+  maxSentenceSeconds: 40,
+  dialects: ["Najdi","Hijazi","Southern Saudi","Gulf (Khaleeji)","Egyptian","Levantine (Shami)","Iraqi","Yemeni","Sudanese","Maghrebi","Modern Standard Arabic only"],
   consentVersion: "2026-10 anonymous",
-  appVersion: "2.1.0"
+  appVersion: "3.0.0"
 };
 const ITEMS = [
-  {id:"W01",type:"word",text:"أُذُن"},
-  {id:"W02",type:"word",text:"صَخْر"},
-  {id:"W03",type:"word",text:"الْمُسْتَضْعَفِينَ"},
-  {id:"W04",type:"word",text:"الْأَبْجَدِيَّة"},
-  {id:"W05",type:"word",text:"فَسَيَكْفِيكَهُمُ"},
-  {id:"W06",type:"word",text:"غَزَال"},
-  {id:"W07",type:"word",text:"غَلِيظ"},
-  {id:"W08",type:"word",text:"قِشْطَة"},
-  {id:"W09",type:"word",text:"شَطِيرَة"},
-  {id:"W10",type:"word",text:"مِحْرَاث"},
-  {id:"S01",type:"sentence",text:"هَذَا مَقَالٌ عَنْ تَغَيُّرِ الْمُنَاخِ. يُمْكِنُ أَنْ يَكُونَ سَبَبُ تَغَيُّرِ الْمُنَاخِ فِي الْعَالَمِ بِسَبَبِ الْأَنْشِطَةِ الْمُخْتَلِفَةِ. عِنْدَمَا يَحْدُثُ تَغَيُّرُ الْمُنَاخِ ؛ دَرَجَاتُ الْحَرَارَةِ يُمْكِنُ أَنْ تَزِيدَ بِشَكْلٍ كَبِيرٍ. خِلَالَ الْقَرْنِ الْمَاضِي ، أَطْلَقَتِ الْأَنْشِطَةُ الْبَشَرِيَّةُ كَمِّيَّاتٍ كَبِيرَةً مِنْ ثَانِي أُكْسِيدِ الْكَرْبُونِ وَغَازَاتِ الدَّفِيئَةِ الْأُخْرَى فِي الْغِلَافِ الْجَوِّيِّ."},
-  {id:"S02",type:"sentence",text:"بَدَلاً مِنِ اتِّخَاذِ قَرَارَاتٍ مُحَدَّدَةٍ بِشَأْنِ الْمَسَارِ الْوَظِيفِيِّ ، أَعْتَقِدُ أَنَّهُ يَجِبُ عَلَيْكَ أَنْ تَكُونَ فُضُولِيًّا. اُحْصُلْ عَلَى فُضُولٍ حَوْلَ الطَّرِيقَةِ الَّتِي يَعْمَلُ بِهَا الْعَالَمُ. لَاحِظِ اهْتِمَامَاتِكَ الْخَاصَّةَ وَابْحَثْ عَنْ طُرُقٍ صَغِيرَةٍ يُمْكِنُكَ مِنْ خِلَالِهَا مُمَارَسَةُ الشَّغَفِ فِي شَيْءٍ مَا. حَتَّى إِذَا لَمْ تَتَمَكَّنْ مِنَ الْعُثُورِ عَلَى طَرِيقَةٍ لِكَسْبِ الْمَالِ مِنْهُ حَتَّى الْآنَ."},
-  {id:"S03",type:"sentence",text:"اُنْظُرْ إِلَى النُّجُومِ وَلَيْسَ إِلَى أَسْفَلَ عِنْدَ قَدَمَيْكَ. حَاوِلْ أَنْ تَفْهَمَ مَا تَرَاهُ ، وَتَسَاءَلْ عَمَّا يَجْعَلُ الْكَوْنَ مَوْجُودًا. كُنْ فُضُولِيًّا."}
+  {id:"W01", type:"word", text:"مُسْتَشْفَى"},
+  {id:"W02", type:"word", text:"فَانُوس"},
+  {id:"W03", type:"word", text:"فِنْجَان"},
+  {id:"W04", type:"word", text:"قُرْص"},
+  {id:"W05", type:"word", text:"صَارُوخ"},
+  {id:"W06", type:"word", text:"سُؤَال"},
+  {id:"W07", type:"word", text:"زُجَاج"},
+  {id:"W08", type:"word", text:"إِبْرِيق"},
+  {id:"W09", type:"word", text:"قَفَص"},
+  {id:"W10", type:"word", text:"شَاطِئ"},
+  {id:"W11", type:"word", text:"دِمَاغ"},
+  {id:"W12", type:"word", text:"قُمَاش"},
+  {id:"W13", type:"word", text:"ضِفْدَع"},
+  {id:"W14", type:"word", text:"مَطْبَخ"},
+  {id:"W15", type:"word", text:"مُثَلَّث"},
+  {id:"W16", type:"word", text:"خَرُوف"},
+  {id:"W17", type:"word", text:"صَمْغ"},
+  {id:"W18", type:"word", text:"صَغِير"},
+  {id:"W19", type:"word", text:"مِيَاه"},
+  {id:"W20", type:"word", text:"قَلَم"},
+  {id:"W21", type:"word", text:"وَادِي"},
+  {id:"W22", type:"word", text:"شُبَّاك"},
+  {id:"W23", type:"word", text:"مَحْفُوظ"},
+  {id:"W24", type:"word", text:"أَبْيَض"},
+  {id:"W25", type:"word", text:"مِصْبَاح"},
+  {id:"W26", type:"word", text:"نَظَّارَة"},
+  {id:"W27", type:"word", text:"غَزَال"},
+  {id:"W28", type:"word", text:"رِيش"},
+  {id:"W29", type:"word", text:"مِرْآة"},
+  {id:"W30", type:"word", text:"ثَلْج"},
+  {id:"S01", type:"sentence", group:"A", text:"مَجْمُوعُ زَوَايَا أَيِّ مُثَلَّثٍ يُسَاوِي مِئَةً وَثَمَانِينَ دَرَجَة"},
+  {id:"S02", type:"sentence", group:"A", text:"تُصْنَعُ مِرْآةُ الْمَنْزِلِ عَادَةً مِنْ زُجَاجٍ مَطْلِيٍّ بِطَبَقَةٍ مَعْدِنِيَّة"},
+  {id:"S03", type:"sentence", group:"A", text:"دِمَاغُ الْإِنْسَانِ عُضْوٌ صَغِيرٌ يَتَحَكَّمُ فِي نَشَاطِ الْجِسْم"},
+  {id:"S04", type:"sentence", group:"A", text:"تُغَطِّي مِيَاهُ الْمُحِيطَاتِ أَكْثَرَ مِنْ ثُلُثَيْ سَطْحِ الْأَرْض"},
+  {id:"S05", type:"sentence", group:"A", text:"يَحْتَاجُ صَارُوخُ الْفَضَاءِ إِلَى سُرْعَةٍ كَبِيرَةٍ لِتَخَطِّي الْجَاذِبِيَّة"},
+  {id:"S06", type:"sentence", group:"B", text:"تَحْدُثُ ظَاهِرَةُ اللَّيْلِ وَالنَّهَارِ بِسَبَبِ دَوَرَانِ الْأَرْضِ حَوْلَ نَفْسِهَا"},
+  {id:"S07", type:"sentence", group:"B", text:"لَا يُضِيءُ الْقَمَرُ بِنَفْسِهِ بَلْ يَعْكِسُ ضَوْءَ الشَّمْسِ فَقَط"},
+  {id:"S08", type:"sentence", group:"B", text:"تَتَطَلَّبُ وَظَائِفُ سُوقِ الْعَمَلِ مَهَارَاتِ التَّوَاصُل"},
+  {id:"S09", type:"sentence", group:"B", text:"تَحْفَظُ الْجِمَالُ الدُّهُونَ فِي سَنَامِهَا لِذَلِكَ تَتَحَمَّلُ الْجُوع"},
+  {id:"S10", type:"sentence", group:"B", text:"يَحْتَاجُ الطُّلَّابُ إِلَى وَقْتٍ كَافٍ مِنَ النَّوْمِ لِلتَّعَلُّمِ بِتَرْكِيز"}
 ];
+
 const CONSENT = {
   title: "Consent Form for Research Data Collection",
   intro: "This consent form is intended for individuals who voluntarily agree to participate in a research-related anonymous data collection activity. The purpose of this activity is to collect handwritten Arabic words and sentences along with voice recordings of these words and sentences. This data is being collected for academic research purposes only.",
@@ -236,17 +254,48 @@ const CONSENT = {
   ],
   agree: "By proceeding with and submitting your handwriting and voice samples, you confirm that you have read and understood the information above and voluntarily agree to participate in this research-related data collection activity."
 };
-const plain = s => s.replace(/[ً-ٰٟـ]/g, "");   // text without diacritics
+
 /* ============================================================ */
-const STEPS = [
-  ["consent","Consent"],["profile","About you"],["record","Recordings"],["pages","Handwritten pages"],["submit","Submit"]
-];
-const TOTAL = ITEMS.length * CONFIG.samplesPerItem;
 const $ = (s, el=document) => el.querySelector(s);
-const esc = s => String(s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const pad = (n, w=2) => String(n).padStart(w, "0");
-const repKey = (item, r) => `${item.id}_r${pad(r+1)}`;
-const audioPath = (item, r) => `data/${S.pid}/audio/${repKey(item, r)}.wav`;
+const plain = s => s.replace(/[ً-ٰٟـ]/g, "");
+const ITEM = Object.fromEntries(ITEMS.map(it => [it.id, it]));
+const PID_RE = /^P-[A-HJ-NP-Z2-9]{6}$/;
+const STEPS = [["consent","Consent"],["profile","About you"],["record","Recordings"],["submit","Submit"]];
+
+/* ---------- which session is this link for? ?session=2 or #session2 ---------- */
+const SESSION = (() => {
+  const q = new URLSearchParams(location.search).get("session") || new URLSearchParams(location.search).get("s");
+  const h = (location.hash.match(/session[-_]?(\d+)/i) || [])[1];
+  const n = parseInt(q || h, 10);
+  return n >= 1 && n <= CONFIG.sessions ? n : null;
+})();
+
+/* ---------- participant identity: kept on this device across sessions ---------- */
+const ID_KEY = "arabic-voice.participant", COOKIE = "arabic_voice_pid";
+const Identity = {
+  load() {
+    let id = null;
+    try { id = JSON.parse(localStorage.getItem(ID_KEY) || "null"); } catch {}
+    const ck = (document.cookie.match(new RegExp("(?:^|; )" + COOKIE + "=([^;]*)")) || [])[1];
+    if (!id && ck && PID_RE.test(decodeURIComponent(ck))) id = {pid: decodeURIComponent(ck), profile: null, sessions: {}};
+    return id && PID_RE.test(id.pid) ? id : null;
+  },
+  save(id) {
+    try { localStorage.setItem(ID_KEY, JSON.stringify(id)); } catch {}
+    try { document.cookie = `${COOKIE}=${encodeURIComponent(id.pid)}; max-age=${60*60*24*730}; path=/; SameSite=Lax${location.protocol === "https:" ? "; Secure" : ""}`; } catch {}
+  },
+  forget() {
+    try { localStorage.removeItem(ID_KEY); } catch {}
+    try { document.cookie = `${COOKIE}=; max-age=0; path=/`; } catch {}
+  },
+  newPid() {
+    const a = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789", b = crypto.getRandomValues(new Uint8Array(6));
+    return "P-" + [...b].map(x => a[x % a.length]).join("");
+  }
+};
+let ID = Identity.load();
 
 /* ---------- storage (IndexedDB, with in-memory fallback) ---------- */
 const DB = (() => {
@@ -254,18 +303,17 @@ const DB = (() => {
   function open() {
     return dbp ||= new Promise((res, rej) => {
       try {
-        const r = indexedDB.open("arabic-collector", 1);
+        const r = indexedDB.open("arabic-voice", 1);
         r.onupgradeneeded = () => { const d = r.result; d.createObjectStore("kv"); d.createObjectStore("files", {keyPath:"path"}); };
-        r.onsuccess = () => res(r.result);
-        r.onerror = () => rej(r.error);
+        r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error);
       } catch (e) { rej(e); }
     }).catch(() => { mem = {kv:new Map(), files:new Map()}; return null; });
   }
   async function tx(store, mode, fn) {
     const d = await open();
-    if (!d) { // memory fallback (private windows etc.)
+    if (!d) {
       const m = mem[store], r = fn({get:k=>({result:m.get(k)}), put:(v,k)=>{m.set(store==="files"?v.path:k, v)},
-        delete:k=>{m.delete(k)}, getAll:()=>({result:[...m.values()]}), clear:()=>{m.clear()}});
+        delete:k=>{m.delete(k)}, getAll:()=>({result:[...m.values()]})});
       return r ? r.result : undefined;
     }
     return new Promise((res, rej) => {
@@ -276,31 +324,50 @@ const DB = (() => {
   return {
     get: k => tx("kv","readonly",s=>s.get(k)),
     set: (k,v) => tx("kv","readwrite",s=>s.put(v,k)),
+    del: k => tx("kv","readwrite",s=>s.delete(k)),
     putFile: f => tx("files","readwrite",s=>s.put(f)),
     getFile: p => tx("files","readonly",s=>s.get(p)),
-    allFiles: async () => (await tx("files","readonly",s=>s.getAll())) || [],
     delFile: p => tx("files","readwrite",s=>s.delete(p)),
-    clear: async () => { await tx("kv","readwrite",s=>s.clear()); await tx("files","readwrite",s=>s.clear()); },
+    allFiles: async () => (await tx("files","readonly",s=>s.getAll())) || [],
     isMemory: () => !!mem
   };
 })();
 
-/* ---------- state ---------- */
+/* ---------- session state ---------- */
 let S = null;
+const stateKey = () => `session-${SESSION}`;
+const save = () => DB.set(stateKey(), S);
 function freshState() {
-  return { v:2, step:"consent", pid:null, formNo:null, age:null, gender:null, consentAt:null,
-           createdAt:new Date().toISOString(), done:{}, cur:{item:0, rep:0}, pages:[], 
-           submitting:false, manifest:false, submittedAt:null, mode: CONFIG.submitUrl ? "online" : "zip" };
+  return { v:3, session:SESSION, pid: ID?.pid || null, step:"consent", consentAt:null, createdAt:new Date().toISOString(),
+           order:null, idx:0, done:{}, submitting:false, manifest:false, submittedAt:null, mode: CONFIG.submitUrl ? "online" : "zip" };
 }
-const save = () => DB.set("state", S);
+const TOTAL = ITEMS.reduce((n, it) => n + (it.type === "word" ? CONFIG.wordReps : CONFIG.sentenceReps), 0);
 const doneCount = () => Object.keys(S.done).length;
-const itemDone = it => { let n=0; for (let r=0;r<CONFIG.samplesPerItem;r++) if (S.done[repKey(it,r)]) n++; return n; };
-function nextOpen(fromItem=0) {
-  for (let k=0;k<ITEMS.length;k++) {
-    const i = (fromItem + k) % ITEMS.length;
-    for (let r=0;r<CONFIG.samplesPerItem;r++) if (!S.done[repKey(ITEMS[i], r)]) return {item:i, rep:r};
+const promptKey = p => `${p.id}_r${p.rep}`;
+const folderOf = it => it.type === "word" ? `${it.id}_${plain(it.text)}` : `Group${it.group}_${it.id}`;
+const fileOf = p => `${S.pid}_session${SESSION}_${p.id}_r${p.rep}.wav`;
+const audioPath = p => `${S.pid}/${folderOf(ITEM[p.id])}/${fileOf(p)}`;
+
+/* Prompt order: each word appears wordReps times, in rounds of shuffled words, with the same word
+   never closer than CONFIG.minWordGap prompts; sentences are spread evenly between the words. */
+function buildOrder() {
+  const shuffle = a => { for (let i = a.length - 1; i > 0; i--) { const j = crypto.getRandomValues(new Uint32Array(1))[0] % (i + 1); [a[i], a[j]] = [a[j], a[i]]; } return a; };
+  const words = ITEMS.filter(i => i.type === "word").map(i => i.id);
+  let seq = [];
+  for (let r = 1; r <= CONFIG.wordReps; r++) {
+    for (let tries = 0; ; tries++) {
+      const round = shuffle([...words]);
+      const tail = seq.slice(-CONFIG.minWordGap).map(p => p.id);
+      if (round.slice(0, CONFIG.minWordGap).every(id => !tail.includes(id)) || tries > 500) { seq.push(...round.map(id => ({id, rep:r}))); break; }
+    }
   }
-  return null;
+  const sents = [];
+  for (let r = 1; r <= CONFIG.sentenceReps; r++) sents.push(...shuffle(ITEMS.filter(i => i.type === "sentence").map(i => ({id:i.id, rep:r}))));
+  const total = seq.length + sents.length, out = [];
+  const slots = new Set(sents.map((_, k) => Math.round((k + 1) * total / (sents.length + 1)) - 1));
+  let w = 0, s = 0;
+  for (let i = 0; i < total; i++) out.push(slots.has(i) && s < sents.length ? sents[s++] : (w < seq.length ? seq[w++] : sents[s++]));
+  return out;
 }
 
 /* ---------- UI chrome ---------- */
@@ -315,28 +382,98 @@ function modal(html, bind) {
   bind(root, close);
 }
 function renderChrome() {
-  const idx = STEPS.findIndex(s => s[0] === S.step);
-  $("#steps").innerHTML = STEPS.map((s,i) => `<li class="${i<idx||S.step==="done"?"done":i===idx?"cur":""}" title="${s[1]}"></li>`).join("");
-  $("#stepLabel").textContent = S.step === "done" ? "Complete" : `Step ${idx+1} of ${STEPS.length} · ${STEPS[idx][1]}`;
-  const pc = $("#pidChip");
-  pc.hidden = !S.formNo; if (S.formNo) pc.innerHTML = `User <b>${esc(S.formNo)}</b>`;
-  $("#withdrawBtn").hidden = !S.consentAt || S.step === "done" || S.submitting || !!S.submittedAt;
+  const inFlow = S && STEPS.some(s => s[0] === S.step);
+  const idx = inFlow ? STEPS.findIndex(s => s[0] === S.step) : -1;
+  $("#steps").hidden = $("#stepLabel").hidden = !inFlow && S?.step !== "done";
+  if (S) {
+    $("#steps").innerHTML = STEPS.map((s,i) => `<li class="${i<idx||S.step==="done"?"done":i===idx?"cur":""}"></li>`).join("");
+    $("#stepLabel").textContent = S.step === "done" ? "Session complete" : idx >= 0 ? `Step ${idx+1} of ${STEPS.length} · ${STEPS[idx][1]}` : "";
+  }
+  $("#sessChip").hidden = !SESSION; if (SESSION) $("#sessChip").innerHTML = `Session <b>${SESSION}</b> of ${CONFIG.sessions}`;
+  const pid = S?.pid || ID?.pid; $("#pidChip").hidden = !pid; if (pid) $("#pidChip").innerHTML = `ID <b>${pid}</b>`;
+  $("#withdrawBtn").hidden = !(S && S.consentAt && !S.submitting && !S.submittedAt);
 }
 function go(step) { S.step = step; save(); render(); scrollTo(0,0); }
 function render() {
-  renderChrome();
-  stopMeter();
-  ({consent:vConsent, profile:vProfile, record:vRecord, pages:vPages, submit:vSubmit, done:vDone})[S.step]();
+  renderChrome(); stopMeter();
+  if (!SESSION) return vChooser();
+  ({identity:vIdentity, consent:vConsent, profile:vProfile, record:vRecord, submit:vSubmit, done:vDone, already:vAlready})[S.step]();
 }
 
 /* ============================================================
-   STEP 1 — CONSENT (anonymous: no name, ID or signature)
+   NO SESSION IN LINK — show the session links
+   ============================================================ */
+function vChooser() {
+  const base = location.href.split(/[?#]/)[0];
+  $("#main").innerHTML = `
+  <div class="stack"><h2>Choose your session</h2>
+    <p class="lead">This study has ${CONFIG.sessions} recording sessions on different days. Open the session link you were sent, or choose it below.</p></div>
+  <section class="card stack">${Array.from({length: CONFIG.sessions}, (_, i) => {
+    const n = i + 1, sub = ID?.sessions?.[n]?.submittedAt;
+    return `<div class="row" style="justify-content:space-between"><div><b>Session ${n}</b><div class="small muted">${sub ? "Submitted " + new Date(sub).toLocaleDateString() : "Not done yet"}</div></div>
+      <a class="btn ${sub ? "" : "primary"}" href="${esc(base)}?session=${n}">Open session ${n}</a></div>`; }).join('<hr class="sep">')}
+  </section>
+  ${ID ? `<p class="small muted">This device remembers participant ID <b>${ID.pid}</b>.</p>` : ""}`;
+}
+
+/* ============================================================
+   IDENTITY — returning participant on a new device / browser
+   ============================================================ */
+function vIdentity() {
+  $("#main").innerHTML = `
+  <div class="stack"><h2>Welcome to session ${SESSION}</h2>
+    <p class="lead">This browser doesn't remember a participant ID. If you recorded an earlier session, enter the ID shown at the end of it so your sessions stay linked.</p></div>
+  <section class="card stack">
+    <label class="field">Participant ID from an earlier session
+      <input type="text" id="pidIn" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="P-XXXXXX"></label>
+    <p class="err" id="ierr" role="alert"></p>
+    <button class="btn primary" id="useId">Use this ID</button>
+  </section>
+  <section class="card stack">
+    <h3>First time taking part?</h3>
+    <p class="small muted">You'll get a new random ID. Use it only if you have not recorded any earlier session.</p>
+    <button class="btn" id="newId">I'm new, give me an ID</button>
+  </section>`;
+  $("#useId").onclick = () => {
+    let v = $("#pidIn").value.trim().toUpperCase().replace(/\s+/g, "");
+    if (/^P[A-Z0-9]{6}$/.test(v)) v = "P-" + v.slice(1);
+    if (!PID_RE.test(v)) { $("#ierr").textContent = "IDs look like P-7K3QX9: the letter P, a dash and 6 letters or digits."; return; }
+    ID = {pid: v, profile: null, sessions: {}, linkedAt: new Date().toISOString()}; Identity.save(ID);
+    S.pid = v; go("consent");
+  };
+  $("#newId").onclick = () => { ID = {pid: Identity.newPid(), profile: null, sessions: {}}; Identity.save(ID); S.pid = ID.pid; go("consent"); };
+}
+function vAlready() {
+  const sub = ID.sessions[SESSION].submittedAt, next = SESSION < CONFIG.sessions ? SESSION + 1 : null;
+  $("#main").innerHTML = `
+  <section class="card stack"><h2>Session ${SESSION} is already done</h2>
+    <p>Participant <b>${ID.pid}</b> submitted this session on ${new Date(sub).toLocaleString()}. Thank you.</p>
+    ${next ? `<p class="muted">Wait for the link to session ${next}, and open it on this same device and browser.</p>` : `<p class="muted">You have finished all ${CONFIG.sessions} sessions.</p>`}
+  </section>
+  ${notYou()}`;
+  bindNotYou();
+}
+function notYou() {
+  return `<section class="card stack"><h3>Not you?</h3>
+    <p class="small muted">If this device is shared, start as a different participant. The ID ${esc(ID?.pid)} will be forgotten on this device; it is not deleted from the study.</p>
+    <button class="btn" id="notYou">Start as a different participant</button></section>`;
+}
+function bindNotYou() {
+  $("#notYou") && ($("#notYou").onclick = () => modal(`<h3>Start as a different participant?</h3>
+    <p class="muted">This device will forget ID <b>${esc(ID.pid)}</b> and any unsubmitted recordings for this session.</p>
+    <div class="row"><button class="btn" data-x>Cancel</button><button class="btn primary grow" data-y>Start fresh</button></div>`,
+    (root, close) => { root.querySelector("[data-x]").onclick = close; root.querySelector("[data-y]").onclick = async () => {
+      close(); await clearSession(); Identity.forget(); ID = null; S = freshState(); S.step = SESSION > 1 ? "identity" : "consent"; await save(); render(); }; }));
+}
+
+/* ============================================================
+   STEP 1 — CONSENT (every session; no name, ID or signature)
    ============================================================ */
 function vConsent() {
   const c = CONSENT;
   $("#main").innerHTML = `
-  <div class="stack"><h2>Before you start</h2>
-    <p class="lead">Please read the consent information. This collection is anonymous: you will not be asked for your name, student ID or signature.</p></div>
+  <div class="stack"><h2>${SESSION === 1 && !ID?.sessions?.[1] ? "Before you start" : `Welcome back: session ${SESSION}`}</h2>
+    <p class="lead">This is a voice-recording session. Please read the consent information. The study is anonymous: you will not be asked for your name, student ID or signature.</p></div>
   <section class="card stack">
     <div class="consent" tabindex="0" aria-label="Consent form text">
       <h3>${esc(c.title)}</h3><p>${esc(c.intro)}</p>
@@ -344,60 +481,70 @@ function vConsent() {
     </div>
     <label class="check"><input type="checkbox" id="agree"> <span>${esc(c.agree)}</span></label>
     <p class="err" id="cerr" role="alert"></p>
-    <div class="row"><button class="btn primary grow" id="cgo">I agree, continue</button></div>
-  </section>`;
+    <button class="btn primary" id="cgo">I agree, continue</button>
+  </section>
+  ${ID && Object.keys(ID.sessions || {}).length ? notYou() : ""}`;
+  bindNotYou();
   $("#cgo").onclick = () => {
     if (!$("#agree").checked) { $("#cerr").textContent = "Tick the box to confirm you agree."; return; }
-    S.consentAt = new Date().toISOString(); go("profile");
+    if (!ID) { ID = {pid: Identity.newPid(), profile: null, sessions: {}}; Identity.save(ID); }
+    S.pid = ID.pid; S.consentAt = new Date().toISOString(); go("profile");
   };
 }
 
 /* ============================================================
-   STEP 2 — PROFILE
+   STEP 2 — ABOUT YOU (asked once, reused in later sessions)
    ============================================================ */
-function vProfile() {
+const LABEL = { male:"Male", female:"Female", right:"Right-handed", left:"Left-handed", yes:"Yes", no:"No" };
+function vProfile(edit = false) {
+  const P = ID.profile;
+  if (P && !edit) {
+    $("#main").innerHTML = `
+    <div class="stack"><h2>Your details</h2><p class="lead">Saved from an earlier session. Check they are still correct.</p></div>
+    <section class="card stack">
+      <dl class="dl">
+        <dt>Age</dt><dd>${P.age}</dd><dt>Gender</dt><dd>${LABEL[P.gender]}</dd><dt>Handedness</dt><dd>${LABEL[P.handedness]}</dd>
+        <dt>Native Arabic speaker</dt><dd>${LABEL[P.nativeArabic]}</dd><dt>Main dialect</dt><dd>${esc(P.dialect)}</dd>
+      </dl>
+      <div class="row"><button class="btn" id="edit">Edit</button><button class="btn primary grow" id="ok">Correct, continue</button></div>
+    </section>`;
+    $("#edit").onclick = () => vProfile(true);
+    $("#ok").onclick = () => go("record");
+    return;
+  }
+  const seg = (name, opts) => `<div class="seg">${opts.map(v => `<label><input type="radio" name="${name}" value="${v}" ${P?.[name]===v?"checked":""}>${LABEL[v]}</label>`).join("")}</div>`;
   $("#main").innerHTML = `
   <div class="stack"><h2>About you</h2>
-    <p class="lead">Only the user number on your printed form, your age and your gender are stored with your samples.</p></div>
+    <p class="lead">These answers are stored with your recordings under your random ID (<b>${ID.pid}</b>), never with your name.</p></div>
   <section class="card stack">
-    <label class="field">User number
-      <input type="text" id="formNo" inputmode="numeric" autocomplete="off" placeholder="e.g. 001" value="${esc(S.formNo ?? "")}">
-      <span class="small muted" style="font-weight:400">Printed at the top of every page of your handwriting form (“User: 001”). It links your handwriting to your voice recordings.</span>
-    </label>
     <div class="grid2">
-      <label class="field">Age<input type="number" id="age" min="${CONFIG.minAge}" max="${CONFIG.maxAge}" inputmode="numeric" value="${S.age ?? ""}"></label>
-      <div class="field" role="radiogroup" aria-label="Gender"><span>Gender</span>
-        <div class="seg">
-          <label><input type="radio" name="gender" value="male" ${S.gender==="male"?"checked":""}>Male</label>
-          <label><input type="radio" name="gender" value="female" ${S.gender==="female"?"checked":""}>Female</label>
-        </div></div>
+      <label class="field">Age<input type="number" id="age" min="${CONFIG.minAge}" max="${CONFIG.maxAge}" inputmode="numeric" value="${P?.age ?? ""}"></label>
+      <div class="field" role="radiogroup" aria-label="Gender"><span>Gender</span>${seg("gender", ["male","female"])}</div>
     </div>
+    <div class="field" role="radiogroup" aria-label="Handedness"><span>Are you right- or left-handed?</span>${seg("handedness", ["right","left"])}</div>
+    <div class="field" role="radiogroup" aria-label="Native language"><span>Is Arabic your native language?</span>${seg("nativeArabic", ["yes","no"])}</div>
+    <label class="field">Which Arabic dialect do you mainly speak?
+      <input type="text" id="dialect" list="dialects" autocomplete="off" placeholder="Choose or type" value="${esc(P?.dialect ?? "")}">
+      <datalist id="dialects">${CONFIG.dialects.map(d => `<option value="${esc(d)}">`).join("")}</datalist></label>
     <p class="err" id="perr" role="alert"></p>
-    <button class="btn primary" id="pgo">Continue</button>
+    <button class="btn primary" id="pgo">Continue to recordings</button>
   </section>`;
   $("#pgo").onclick = () => {
-    const raw = $("#formNo").value.trim().replace(/^user[:\s]*/i, "");
-    const age = parseInt($("#age").value, 10), g = document.querySelector('input[name=gender]:checked')?.value;
-    const err = !/^\d{1,6}$/.test(raw) ? "Enter the user number printed on your form (digits only)." :
-                !(age >= CONFIG.minAge && age <= CONFIG.maxAge) ? `Enter an age between ${CONFIG.minAge} and ${CONFIG.maxAge}.` :
-                !g ? "Choose a gender." : "";
+    const v = n => document.querySelector(`input[name=${n}]:checked`)?.value;
+    const age = parseInt($("#age").value, 10), dialect = $("#dialect").value.trim();
+    const err = !(age >= CONFIG.minAge && age <= CONFIG.maxAge) ? `Enter an age between ${CONFIG.minAge} and ${CONFIG.maxAge}.` :
+      !v("gender") ? "Choose a gender." : !v("handedness") ? "Choose right- or left-handed." :
+      !v("nativeArabic") ? "Answer whether Arabic is your native language." : !dialect ? "Enter the dialect you mainly speak." : "";
     $("#perr").textContent = err; if (err) return;
-    const formNo = raw.padStart(3, "0");
-    if (S.pid && formNo !== S.formNo && (doneCount() || S.pages.some(Boolean))) {
-      $("#perr").textContent = "You already started recording with a different user number. Use Stop and delete in the header to start over."; return;
-    }
-    if (!S.pid) {
-      const a = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789", b = crypto.getRandomValues(new Uint8Array(4));
-      S.pid = `U${formNo}-` + [...b].map(x => a[x % a.length]).join("");   // suffix avoids clashes from mistyped numbers
-    }
-    S.formNo = formNo; S.age = age; S.gender = g; go("record");
+    ID.profile = {age, gender:v("gender"), handedness:v("handedness"), nativeArabic:v("nativeArabic"), dialect, updatedAt:new Date().toISOString()};
+    Identity.save(ID); go("record");
   };
 }
 
 /* ============================================================
    STEP 3 — RECORDINGS
    ============================================================ */
-const R = { stream:null, ctx:null, analyser:null, mr:null, chunks:[], t0:0, timer:0, auto:0, raf:0, take:null, url:null, busy:false };
+const R = { stream:null, ctx:null, analyser:null, mr:null, chunks:[], t0:0, timer:0, auto:0, raf:0, take:null, url:null, busy:false, starting:false };
 function stopMeter() { cancelAnimationFrame(R.raf); clearInterval(R.timer); clearTimeout(R.auto); }
 async function ensureMic() {
   if (R.stream && R.stream.active) return;
@@ -408,11 +555,10 @@ async function ensureMic() {
   R.ctx.createMediaStreamSource(R.stream).connect(R.analyser);
 }
 function vRecord() {
-  if (!nextOpen() && !S.done[repKey(ITEMS[S.cur.item], S.cur.rep)]) S.cur = {item:0, rep:0};
-  const it = ITEMS[S.cur.item], n = CONFIG.samplesPerItem, dc = doneCount(), all = dc >= TOTAL;
-  const wordsN = ITEMS.filter(x=>x.type==="word").length, idxInType = ITEMS.filter(x=>x.type===it.type).indexOf(it) + 1;
-  const typeN = it.type === "word" ? wordsN : ITEMS.length - wordsN;
-  const redo = !!S.done[repKey(it, S.cur.rep)];
+  if (!S.order) { S.order = buildOrder(); S.idx = 0; save(); }
+  const dc = doneCount();
+  if (S.idx >= S.order.length) { const first = S.order.findIndex(p => !S.done[promptKey(p)]); if (first < 0) return go("submit"); S.idx = first; }
+  const p = S.order[S.idx], it = ITEM[p.id], isW = it.type === "word", redo = !!S.done[promptKey(p)];
   $("#main").innerHTML = `
   <div class="stack" style="gap:8px">
     <div class="row" style="justify-content:space-between"><h2>Read aloud</h2><span class="chip"><b>${dc}</b>&nbsp;of ${TOTAL} recorded</span></div>
@@ -420,19 +566,16 @@ function vRecord() {
   </div>
   <section class="prompt" aria-live="polite">
     <div class="prompt-head">
-      <span class="eyebrow">${it.type === "word" ? "Word" : "Sentence"} ${idxInType} of ${typeN}</span>
-      <span class="eyebrow">Repetition ${S.cur.rep+1} of ${n}${redo ? " · re-recording" : ""}</span>
+      <span class="eyebrow">${isW ? "Word" : `Sentence · Group ${it.group}`}</span>
+      <span class="eyebrow">Prompt ${S.idx+1} of ${S.order.length}${redo ? " · re-recording" : ""}</span>
     </div>
-    <div class="ar ${it.type==="word"?"word":"sent"}" lang="ar" dir="rtl">${esc(it.text)}</div>
-    <div class="reps" role="group" aria-label="Repetitions">${Array.from({length:n},(_,r)=>{
-      const d = S.done[repKey(it,r)], c = r===S.cur.rep;
-      return `<button class="rep ${d?"done":""} ${c?"cur":""}" data-rep="${r}" aria-label="Repetition ${r+1}${d?", recorded":""}">${r+1}</button>`;}).join("")}</div>
+    <div class="ar ${isW ? "word" : "sent"}" lang="ar" dir="rtl">${esc(it.text)}</div>
   </section>
   <section class="card recbox">
     <button class="recbtn" id="recBtn" aria-label="Start recording"><span class="dot"></span></button>
     <div class="timer" id="timer">0.0 s</div>
     <div class="meter" aria-hidden="true"><i id="meter"></i></div>
-    <p class="small muted" id="recHint">Tap the red button, read the ${it.type==="word"?"word":"sentence"} once, then tap again to stop. <span class="nokbd">Keyboard: <kbd>Space</kbd> record/stop, <kbd>Enter</kbd> save.</span></p>
+    <p class="small muted" id="recHint">Tap the red button, read the ${isW ? "word" : "sentence"} once with its diacritics, then tap again to stop. <span>Keyboard: <kbd>Space</kbd> record/stop, <kbd>Enter</kbd> save.</span></p>
     <div id="review" class="stack" style="align-items:center;width:100%" hidden>
       <audio id="player" controls></audio>
       <div class="row" style="justify-content:center;width:100%">
@@ -442,34 +585,32 @@ function vRecord() {
     </div>
     <p class="err" id="rerr" role="alert"></p>
   </section>
-  ${all ? `<section class="card stack"><h3>All ${TOTAL} recordings are done</h3><p class="muted">You can still tap any item below to re-record a repetition.</p><button class="btn primary" id="toPages">Continue to handwritten pages</button></section>` : ""}
-  <details class="card" ${all?"open":""}><summary>All items (${ITEMS.filter(x=>itemDone(x)===n).length} of ${ITEMS.length} complete)</summary>
-    <div class="itemlist" style="margin-top:12px">${ITEMS.map((x,i)=>{const k=itemDone(x);
-      return `<button class="item ${k===n?"full":""} ${i===S.cur.item?"cur":""}" data-item="${i}"><span class="n">${k}/${n}</span><span class="t" lang="ar">${esc(x.text)}</span></button>`}).join("")}</div>
-  </details>`;
-  if (all) $("#toPages").onclick = () => go("pages");
-  document.querySelectorAll(".rep").forEach(b => b.onclick = () => { if (R.busy) return; discardTake(); S.cur.rep = +b.dataset.rep; save(); vRecord(); });
-  document.querySelectorAll(".item").forEach(b => b.onclick = () => {
-    if (R.busy) return; discardTake(); const i = +b.dataset.item, x = ITEMS[i];
-    let r = 0; while (r < n && S.done[repKey(x,r)]) r++; S.cur = {item:i, rep: r<n ? r : 0}; save(); vRecord(); scrollTo(0,0);
-  });
+  <div class="row" style="justify-content:space-between">
+    <button class="btn sm" id="prev" ${S.idx === 0 ? "disabled" : ""}>Previous prompt</button>
+    ${redo && dc < TOTAL ? `<button class="btn sm" id="resume">Back to next new prompt</button>` : ""}
+    ${dc === TOTAL ? `<button class="btn sm primary" id="toSubmit">All done: review and submit</button>` : ""}
+  </div>`;
   $("#recBtn").onclick = toggleRec;
   $("#again").onclick = () => { discardTake(); toggleRec(); };
   $("#saveBtn").onclick = saveTake;
+  $("#prev").onclick = () => { if (R.busy || isRecording()) return; discardTake(); S.idx--; save(); vRecord(); };
+  $("#resume") && ($("#resume").onclick = () => { discardTake(); S.idx = S.order.findIndex(q => !S.done[promptKey(q)]); save(); vRecord(); });
+  $("#toSubmit") && ($("#toSubmit").onclick = () => go("submit"));
   if (R.take) showReview();
 }
+const isRecording = () => R.mr && R.mr.state === "recording";
 function discardTake() { if (R.url) URL.revokeObjectURL(R.url); R.take = null; R.url = null; }
 async function toggleRec() {
   const btn = $("#recBtn"); if (!btn || R.busy || R.starting) return;
   $("#rerr").textContent = "";
-  if (R.mr && R.mr.state === "recording") { R.mr.stop(); return; }
+  if (isRecording()) { R.mr.stop(); return; }
   R.starting = true; btn.disabled = true;
   try { await ensureMic(); if (R.ctx.state === "suspended") await R.ctx.resume(); } catch (e) {
     $("#rerr").textContent = e.name === "NotAllowedError" ? "Microphone access was blocked. Allow the microphone for this site in your browser settings, then reload the page." : (e.message || String(e));
     return;
   } finally { R.starting = false; btn.disabled = false; }
   discardTake(); $("#review").hidden = true;
-  const it = ITEMS[S.cur.item], max = (it.type === "word" ? CONFIG.maxWordSeconds : CONFIG.maxSentenceSeconds) * 1000;
+  const it = ITEM[S.order[S.idx].id], max = (it.type === "word" ? CONFIG.maxWordSeconds : CONFIG.maxSentenceSeconds) * 1000;
   R.chunks = []; R.mr = new MediaRecorder(R.stream);
   R.mr.ondataavailable = e => e.data.size && R.chunks.push(e.data);
   R.mr.onstop = onRecStop;
@@ -477,10 +618,10 @@ async function toggleRec() {
   btn.classList.add("on"); btn.setAttribute("aria-label","Stop recording");
   $("#recHint").textContent = "Recording… tap to stop.";
   R.timer = setInterval(() => { const t = $("#timer"); if (t) t.textContent = ((performance.now()-R.t0)/1000).toFixed(1) + " s"; }, 100);
-  R.auto = setTimeout(() => R.mr?.state === "recording" && R.mr.stop(), max);
+  R.auto = setTimeout(() => isRecording() && R.mr.stop(), max);
   const buf = new Float32Array(R.analyser.fftSize);
-  const loop = () => { R.analyser.getFloatTimeDomainData(buf); let p = 0; for (const v of buf) p = Math.max(p, Math.abs(v));
-    const m = $("#meter"); if (m) { m.style.width = Math.min(100, p*140) + "%"; m.style.background = p > .97 ? "var(--rec)" : "var(--ok)"; }
+  const loop = () => { R.analyser.getFloatTimeDomainData(buf); let pk = 0; for (const v of buf) pk = Math.max(pk, Math.abs(v));
+    const m = $("#meter"); if (m) { m.style.width = Math.min(100, pk*140) + "%"; m.style.background = pk > .97 ? "var(--rec)" : "var(--ok)"; }
     R.raf = requestAnimationFrame(loop); };
   loop();
 }
@@ -489,8 +630,7 @@ async function onRecStop() {
   const btn = $("#recBtn"); if (btn) { btn.classList.remove("on"); btn.disabled = true; btn.setAttribute("aria-label","Start recording"); }
   const m = $("#meter"); if (m) m.style.width = "0";
   try {
-    const raw = new Blob(R.chunks, {type: R.mr.mimeType || "audio/webm"});
-    const {wav, duration, peak} = await toWav16k(raw);
+    const {wav, duration, peak} = await toWav16k(new Blob(R.chunks, {type: R.mr.mimeType || "audio/webm"}));
     if (duration < 0.25) throw new Error("That recording was too short. Try again.");
     R.take = {wav, duration, peak, at:new Date().toISOString()}; R.url = URL.createObjectURL(wav);
     showReview();
@@ -504,18 +644,18 @@ function showReview() {
 }
 async function saveTake() {
   if (!R.take || R.busy) return; R.busy = true;
-  const it = ITEMS[S.cur.item], r = S.cur.rep, key = repKey(it, r);
+  const p = S.order[S.idx];
   try {
-    await DB.putFile({path: audioPath(it, r), blob: R.take.wav, mime:"audio/wav", uploaded:false, v:Date.now()});
-    S.done[key] = {duration: +R.take.duration.toFixed(3), at: R.take.at};
+    await DB.putFile({path: audioPath(p), session: SESSION, blob: R.take.wav, mime:"audio/wav", uploaded:false});
+    S.done[promptKey(p)] = {duration: +R.take.duration.toFixed(3), at: R.take.at, position: S.idx + 1};
     discardTake();
-    let nr = null; for (let k=1;k<=CONFIG.samplesPerItem;k++){ const q=(r+k)%CONFIG.samplesPerItem; if(!S.done[repKey(it,q)]){nr=q;break;} }
-    if (nr !== null && nr > r) S.cur.rep = nr;
-    else { const nx = nextOpen(S.cur.item); if (nx) S.cur = nx; }
+    const nextNew = S.order.findIndex((q, i) => i > S.idx && !S.done[promptKey(q)]);
+    S.idx = nextNew >= 0 ? nextNew : S.order.findIndex(q => !S.done[promptKey(q)]);
+    if (S.idx < 0) S.idx = S.order.length;
     await save();
-    if (doneCount() === TOTAL && !S._celebrated) { S._celebrated = true; toast("All recordings done."); }
-  } catch (e) { $("#rerr").textContent = "Could not save this recording: " + e.message; }
-  finally { R.busy = false; vRecord(); }
+  } catch (e) { $("#rerr").textContent = "Could not save this recording: " + e.message; R.busy = false; return; }
+  R.busy = false;
+  if (S.idx >= S.order.length) { toast("All recordings done."); go("submit"); } else vRecord();
 }
 async function toWav16k(blob) {
   const ab = await blob.arrayBuffer();
@@ -533,235 +673,140 @@ async function toWav16k(blob) {
   return {wav: new Blob([dv], {type:"audio/wav"}), duration: out.length / rate, peak};
 }
 document.addEventListener("keydown", e => {
-  if (S?.step !== "record" || e.target.closest("input,textarea,select,button,audio,summary")) return;
+  if (S?.step !== "record" || e.target.closest("input,textarea,select,button,audio,a")) return;
   if (e.code === "Space") { e.preventDefault(); toggleRec(); }
   else if (e.key === "Enter" && R.take) { e.preventDefault(); saveTake(); }
 });
 
 /* ============================================================
-   STEP 4 — HANDWRITTEN PAGES (each page is submitted as its own PDF)
-   ============================================================ */
-const pagesDone = () => S.pages.filter(Boolean).length === CONFIG.formPages;
-function vPages() {
-  const n = CONFIG.formPages, have = S.pages.filter(Boolean).length;
-  $("#main").innerHTML = `
-  <div class="stack"><h2>Handwritten pages</h2>
-    <p class="lead">Add each of the ${n} pages of your printed form after you have written on them. Take a photo or choose a scanned file for every page; each page is submitted as its own PDF.</p></div>
-  <section class="card stack">
-    <ul class="small" style="margin:0;padding-inline-start:18px">
-      <li>Check that <b>User: ${esc(S.formNo)}</b> is printed at the top of each page.</li>
-      <li>Lay each page flat in good light and fit the whole page in the frame.</li>
-      <li>Scanned files must be one page each (a single-page PDF, or a JPG/PNG image).</li>
-    </ul>
-    <div class="slots">${Array.from({length:n}, (_, i) => {
-      const p = S.pages[i];
-      return `<div class="slot ${p ? "filled" : ""}" data-i="${i}">
-        <div class="img">${p?.thumb ? `<img alt="Page ${i+1}" src="${p.thumb}">` : `<span>${p ? "PDF" : `Page ${i+1}`}</span>`}</div>
-        <div class="meta"><b>Page ${i+1}</b>${p ? `<button class="linkbtn" data-del="${i}">Remove</button>` : ""}</div>
-        <div class="acts">
-          <button class="btn sm" data-cam="${i}">${p ? "Retake" : "Camera"}</button>
-          <button class="btn sm" data-file="${i}">${p ? "Replace" : "File"}</button>
-        </div></div>`; }).join("")}</div>
-    <input type="file" id="camIn" accept="image/*" capture="environment" hidden>
-    <input type="file" id="fileIn" accept="image/*,application/pdf" hidden>
-    <p class="err" id="pgerr" role="alert"></p>
-    <p class="small muted" id="pgbusy" hidden>Preparing PDF…</p>
-  </section>
-  <div class="row">
-    <button class="btn" id="backRec">Back to recordings</button>
-    <button class="btn primary grow" id="pgGo" ${pagesDone() ? "" : "disabled"}>${pagesDone() ? "Continue" : `${have} of ${n} pages added`}</button>
-  </div>`;
-  let target = 0;
-  document.querySelectorAll("[data-cam]").forEach(b => b.onclick = () => { target = +b.dataset.cam; $("#camIn").value = ""; $("#camIn").click(); });
-  document.querySelectorAll("[data-file]").forEach(b => b.onclick = () => { target = +b.dataset.file; $("#fileIn").value = ""; $("#fileIn").click(); });
-  document.querySelectorAll("[data-del]").forEach(b => b.onclick = async () => {
-    const i = +b.dataset.del; await DB.delFile(S.pages[i].path); S.pages[i] = null; await save(); vPages();
-  });
-  $("#camIn").onchange = e => setPage(target, e.target.files[0]);
-  $("#fileIn").onchange = e => setPage(target, e.target.files[0]);
-  $("#backRec").onclick = () => go("record");
-  $("#pgGo").onclick = () => go("submit");
-}
-async function setPage(i, file) {
-  if (!file) return; $("#pgerr").textContent = ""; $("#pgbusy").hidden = false;
-  try {
-    const isPdf = file.type === "application/pdf" || /\.pdf$/i.test(file.name);
-    if (!isPdf && !file.type.startsWith("image/")) throw new Error(`${file.name} is not a photo, image or PDF.`);
-    let pdf, thumb = null, source;
-    if (isPdf) {
-      const count = await pdfPageCount(file);
-      if (count > 1) throw new Error(`${file.name} has ${count} pages. Choose a PDF with only page ${i+1}.`);
-      pdf = file; source = "pdf";
-    } else {
-      const img = await imageToJpeg(file);
-      pdf = jpegToPdf(img.bytes, img.w, img.h); thumb = img.thumb; source = file.type || "image";
-    }
-    const path = `data/${S.pid}/handwriting/page_${pad(i+1)}.pdf`;
-    await DB.putFile({path, blob: pdf, mime: "application/pdf", uploaded: false, v: Date.now()});
-    while (S.pages.length < CONFIG.formPages) S.pages.push(null);
-    S.pages[i] = {path, mime: "application/pdf", size: pdf.size, source, thumb, original: file.name, addedAt: new Date().toISOString()};
-    await save();
-  } catch (e) { $("#pgerr").textContent = e.message || "Could not add this page."; $("#pgbusy").hidden = true; return; }
-  vPages();
-}
-// Decode (respecting the photo's rotation), cap at A4 @ 300 dpi, re-encode as JPEG, make a small preview.
-async function imageToJpeg(file, maxSide = 3508) {
-  let src;
-  try { src = await createImageBitmap(file, {imageOrientation: "from-image"}); }
-  catch { src = await new Promise((res, rej) => { const im = new Image(); im.onload = () => res(im); im.onerror = () => rej(new Error("This image format can't be read. Use JPG or PNG.")); im.src = URL.createObjectURL(file); }); }
-  const W = src.width, H = src.height, k = Math.min(1, maxSide / Math.max(W, H));
-  const c = document.createElement("canvas"); c.width = Math.round(W * k); c.height = Math.round(H * k);
-  const x = c.getContext("2d"); x.fillStyle = "#fff"; x.fillRect(0, 0, c.width, c.height); x.drawImage(src, 0, 0, c.width, c.height);
-  const blob = await new Promise(r => c.toBlob(r, "image/jpeg", .92));
-  const t = document.createElement("canvas"), tk = 320 / Math.max(c.width, c.height);
-  t.width = Math.round(c.width * tk); t.height = Math.round(c.height * tk); t.getContext("2d").drawImage(c, 0, 0, t.width, t.height);
-  src.close?.();
-  return {bytes: new Uint8Array(await blob.arrayBuffer()), w: c.width, h: c.height, thumb: t.toDataURL("image/jpeg", .7)};
-}
-// Minimal single-page PDF that embeds the JPEG unchanged (long side = A4 height, 842 pt).
-function jpegToPdf(jpg, w, h) {
-  const s = 842 / Math.max(w, h), pw = +(w * s).toFixed(2), ph = +(h * s).toFixed(2);
-  const enc = new TextEncoder(), parts = [], offs = []; let len = 0;
-  const add = d => { const b = typeof d === "string" ? enc.encode(d) : d; parts.push(b); len += b.length; };
-  const obj = (n, body) => { offs[n] = len; add(`${n} 0 obj\n${body}\nendobj\n`); };
-  add("%PDF-1.4\n%\xE2\xE3\xCF\xD3\n");
-  obj(1, "<< /Type /Catalog /Pages 2 0 R >>");
-  obj(2, "<< /Type /Pages /Kids [3 0 R] /Count 1 >>");
-  obj(3, `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${pw} ${ph}] /Resources << /XObject << /Im0 4 0 R >> >> /Contents 5 0 R >>`);
-  offs[4] = len;
-  add(`4 0 obj\n<< /Type /XObject /Subtype /Image /Width ${w} /Height ${h} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${jpg.length} >>\nstream\n`);
-  add(jpg); add("\nendstream\nendobj\n");
-  const content = `q ${pw} 0 0 ${ph} 0 0 cm /Im0 Do Q`;
-  obj(5, `<< /Length ${content.length} >>\nstream\n${content}\nendstream`);
-  const xref = len;
-  add(`xref\n0 6\n0000000000 65535 f \n${[1,2,3,4,5].map(n => String(offs[n]).padStart(10, "0") + " 00000 n \n").join("")}`);
-  add(`trailer\n<< /Size 6 /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF\n`);
-  return new Blob(parts, {type: "application/pdf"});
-}
-// Best-effort page count (0 = unknown, e.g. compressed object streams).
-async function pdfPageCount(file) {
-  const t = new TextDecoder("latin1").decode(await file.arrayBuffer());
-  const m = t.match(/\/Type\s*\/Page(?![a-zA-Z])/g); return m ? m.length : 0;
-}
-
-/* ============================================================
-   STEP 5 — SUBMIT
+   STEP 4 — SUBMIT
    ============================================================ */
 function buildMeta() {
-  const rel = p => p.split("/").slice(2).join("/");
   return {
-    participant_id: S.pid, form_user_number: S.formNo, age: S.age, gender: S.gender,
+    participant_id: S.pid, session: SESSION, sessions_total: CONFIG.sessions,
+    profile: { age: ID.profile.age, gender: ID.profile.gender, handedness: ID.profile.handedness,
+               native_arabic: ID.profile.nativeArabic, dialect: ID.profile.dialect },
     consent: { given: true, at: S.consentAt, form_version: CONFIG.consentVersion },
     started_at: S.createdAt, submitted_at: new Date().toISOString(),
-    app_version: CONFIG.appVersion, samples_per_item: CONFIG.samplesPerItem,
-    audio_format: "WAV, PCM 16-bit, mono, 16 kHz",
-    items: ITEMS.map(it => ({...it, text_plain: plain(it.text)})),
-    recordings: doneCount(),
-    handwriting: S.pages.map((p, i) => p && ({file: rel(p.path), page: i+1, format: "PDF, single page", submitted_from: p.source === "pdf" ? "scanned PDF" : "photo/image", bytes: p.size})).filter(Boolean),
+    app_version: CONFIG.appVersion, audio_format: "WAV, PCM 16-bit, mono, 16 kHz",
+    reps: { word: CONFIG.wordReps, sentence: CONFIG.sentenceReps }, recordings: doneCount(),
+    items: ITEMS.map(it => ({...it, text_plain: plain(it.text), folder: folderOf(it)})),
+    prompt_order: S.order.map((p, i) => ({position: i + 1, item_id: p.id, repetition: p.rep})),
     device: { userAgent: navigator.userAgent, language: navigator.language }
   };
 }
 function buildCsv() {
-  const q = v => `"${String(v).replace(/"/g,'""')}"`;
-  const rows = [["participant_id","form_user_number","item_id","item_type","repetition","file","duration_sec","recorded_at","text","text_plain"]];
-  for (const it of ITEMS) for (let r=0;r<CONFIG.samplesPerItem;r++) { const d = S.done[repKey(it,r)]; if (!d) continue;
-    rows.push([S.pid, S.formNo, it.id, it.type, r+1, `audio/${repKey(it,r)}.wav`, d.duration, d.at, it.text, plain(it.text)]); }
+  const q = v => `"${String(v ?? "").replace(/"/g,'""')}"`;
+  const P = ID.profile;
+  const rows = [["participant_id","session","position","item_id","item_type","group","repetition","folder","file","duration_sec","recorded_at","text","text_plain","age","gender","handedness","native_arabic","dialect"]];
+  S.order.forEach((p, i) => { const d = S.done[promptKey(p)], it = ITEM[p.id]; if (!d) return;
+    rows.push([S.pid, SESSION, i+1, it.id, it.type, it.group || "", p.rep, folderOf(it), fileOf(p), d.duration, d.at, it.text, plain(it.text), P.age, P.gender, P.handedness, P.nativeArabic, P.dialect]); });
   return "﻿" + rows.map(r => r.map(q).join(",")).join("\r\n") + "\r\n";
 }
 function vSubmit() {
-  const dc = doneCount(), ok = dc === TOTAL && pagesDone(), online = S.mode === "online";
-  const pagesTxt = `${S.pages.filter(Boolean).length}/${CONFIG.formPages}`;
+  const dc = doneCount(), ok = dc === TOTAL, online = S.mode === "online";
   $("#main").innerHTML = `
-  <div class="stack"><h2>Review and submit</h2>
-    <p class="lead">${online ? "Your voice recordings and handwritten pages will be sent together to the research team." : "Download your voice recordings and handwritten pages as one ZIP file and hand it in."}</p></div>
+  <div class="stack"><h2>Submit session ${SESSION}</h2>
+    <p class="lead">${online ? "Your recordings will be sent to the research team's storage." : "Download your recordings as a ZIP file and hand it in as instructed."}</p></div>
   <section class="card stack">
     <div class="summary">
-      <div><b>${dc}/${TOTAL}</b><span>Voice recordings</span></div>
-      <div><b>${pagesTxt}</b><span>Handwritten pages</span></div>
-      <div><b>${esc(S.formNo)}</b><span>User number</span></div>
+      <div><b>${dc}/${TOTAL}</b><span>Recordings</span></div>
+      <div><b>${SESSION}/${CONFIG.sessions}</b><span>Session</span></div>
+      <div><b>${S.pid}</b><span>Participant ID</span></div>
     </div>
-    ${dc < TOTAL ? `<p class="note warn">${TOTAL-dc} recordings are still missing. <button class="linkbtn" id="toRec">Finish recordings</button></p>` : ""}
-    ${!pagesDone() ? `<p class="note warn">Some handwritten pages are missing. <button class="linkbtn" id="toPg">Add pages</button></p>` : ""}
+    ${ok ? "" : `<p class="note warn">${TOTAL-dc} recordings are still missing. <button class="linkbtn" id="toRec">Finish them</button></p>`}
     <p class="note">Because your data is anonymous, it can't be identified or withdrawn after you submit.</p>
     <div id="subProg" class="stack" hidden><div class="bar"><i id="subBar" style="width:0"></i></div><span class="small muted" id="subTxt"></span></div>
     <p class="err" id="serr" role="alert"></p>
     <div class="row">
-      <button class="btn" id="backPg">Back</button>
+      <button class="btn" id="back">Back to recordings</button>
       <button class="btn primary grow" id="subBtn" ${ok ? "" : "disabled"}>${online ? "Submit" : "Download ZIP"}</button>
     </div>
   </section>`;
   $("#toRec") && ($("#toRec").onclick = () => go("record"));
-  $("#toPg") && ($("#toPg").onclick = () => go("pages"));
-  $("#backPg").onclick = () => go("pages");
-  $("#subBtn").onclick = online ? submitOnline : async () => { await downloadZip(); S.submittedAt = new Date().toISOString(); go("done"); };
+  $("#back").onclick = () => { S.idx = Math.max(0, S.order.length - 1); go("record"); };
+  $("#subBtn").onclick = online ? submitOnline : async () => { await downloadZip(); await finish(); };
+}
+async function writeManifest() {
+  const put = (name, text, mime) => DB.putFile({path:`${S.pid}/${name}`, session:SESSION, blob:new Blob([text], {type:mime}), mime, uploaded:false});
+  await put(`session${SESSION}_metadata.json`, JSON.stringify(buildMeta(), null, 2), "application/json");
+  await put(`session${SESSION}_recordings.csv`, buildCsv(), "text/csv");
 }
 async function submitOnline() {
-  const btn = $("#subBtn"); btn.disabled = true; $("#backPg").disabled = true; btn.textContent = "Submitting…";
+  const btn = $("#subBtn"); btn.disabled = true; $("#back").disabled = true; btn.textContent = "Submitting…";
   $("#subProg").hidden = false; $("#serr").textContent = "";
   S.submitting = true; await save(); renderChrome();
-  if (!S.manifest) {
-    await DB.putFile({path:`data/${S.pid}/metadata.json`, blob:new Blob([JSON.stringify(buildMeta(), null, 2)], {type:"application/json"}), mime:"application/json", uploaded:false, v:Date.now()});
-    await DB.putFile({path:`data/${S.pid}/recordings.csv`, blob:new Blob([buildCsv()], {type:"text/csv"}), mime:"text/csv", uploaded:false, v:Date.now()});
-    S.manifest = true; await save();
-  }
+  if (!S.manifest) { await writeManifest(); S.manifest = true; await save(); }
   const start = Date.now();
   while (true) {
     const st = await syncStatus();
     $("#subBar").style.width = (st.total ? st.sent / st.total * 100 : 100) + "%";
     $("#subTxt").textContent = `Sent ${st.sent} of ${st.total} files${lastSyncError ? " · retrying (" + lastSyncError + ")" : ""}. Keep this page open.`;
     if (!st.pending) break;
-    sync(); await new Promise(r => setTimeout(r, 800));
+    sync(); await new Promise(r => setTimeout(r, 700));
     if (Date.now() - start > 20*60*1000) {
-      $("#serr").textContent = "Submission is taking too long. Check your internet connection and press Try again. Nothing is lost; files already sent are not sent twice.";
+      $("#serr").textContent = "Submission is taking too long. Check your internet connection and press Try again. Nothing is lost, and files already sent are not sent twice.";
       btn.disabled = false; btn.textContent = "Try again"; return;
     }
   }
-  S.submitting = false; S.submittedAt = new Date().toISOString(); go("done");
+  try {
+    const P = ID.profile;
+    await post({op:"log", row:[new Date().toISOString(), S.pid, SESSION, doneCount(), P.age, P.gender, P.handedness, P.nativeArabic, P.dialect, CONFIG.appVersion]});
+  } catch (e) { console.warn("index log failed", e); }   // files are already safe; the index row is a convenience
+  await finish();
 }
+async function finish() {
+  S.submitting = false; S.submittedAt = new Date().toISOString();
+  ID.sessions = ID.sessions || {}; ID.sessions[SESSION] = {submittedAt: S.submittedAt}; Identity.save(ID);
+  if (S.mode === "online") for (const f of await sessionFiles()) await DB.delFile(f.path);   // free space; data is in Drive
+  go("done");
+}
+async function sessionFiles() { return (await DB.allFiles()).filter(f => f.session === SESSION); }
 async function downloadZip() {
-  const zip = new JSZip(), files = await DB.allFiles();
-  for (const f of files) if (f.path.startsWith(`data/${S.pid}/`)) zip.file(f.path.slice(5), f.blob);
-  zip.file(`${S.pid}/metadata.json`, JSON.stringify(buildMeta(), null, 2));
-  zip.file(`${S.pid}/recordings.csv`, buildCsv());
-  download(await zip.generateAsync({type:"blob", compression:"STORE"}), `${S.pid}.zip`);
-}
-function download(blob, name) {
-  const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = name;
+  const zip = new JSZip();
+  for (const f of await sessionFiles()) zip.file(f.path, f.blob);
+  zip.file(`${S.pid}/session${SESSION}_metadata.json`, JSON.stringify(buildMeta(), null, 2));
+  zip.file(`${S.pid}/session${SESSION}_recordings.csv`, buildCsv());
+  const blob = await zip.generateAsync({type:"blob", compression:"STORE"});
+  const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = `${S.pid}_session${SESSION}.zip`;
   document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 60000);
 }
 function vDone() {
-  const online = S.mode === "online";
+  const next = SESSION < CONFIG.sessions ? SESSION + 1 : null, online = S.mode === "online";
   $("#main").innerHTML = `
   <section class="card stack">
-    <h2>Thank you</h2>
-    <p>${online ? "Your voice recordings and handwritten pages have been submitted." : `Your data was downloaded as <b>${esc(S.pid)}.zip</b>. Hand this file in as instructed.`}</p>
-    ${online ? "" : `<div class="row"><button class="btn" id="dlZip">Download ZIP again</button></div>`}
+    <h2>Session ${SESSION} complete. Thank you</h2>
+    <p>${online ? `Your ${TOTAL} recordings have been submitted.` : `Your recordings were downloaded as <b>${S.pid}_session${SESSION}.zip</b>. Hand this file in as instructed.`}</p>
+    ${online ? "" : `<button class="btn" id="dlZip" style="align-self:flex-start">Download ZIP again</button>`}
   </section>
   <section class="card stack">
-    <h3>Using a shared device?</h3>
-    <p class="small muted">Clear this device so the next person starts fresh${online ? "" : ". Make sure your ZIP downloaded first"}.</p>
-    <button class="btn primary" id="newP">Clear and start a new participant</button>
+    <h3>${next ? `Before session ${next}` : "All sessions finished"}</h3>
+    <div class="row" style="justify-content:space-between"><span class="pid">${S.pid}</span><button class="btn" id="copyPid">Copy ID</button></div>
+    ${next ? `<p class="muted">This is your participant ID. You'll receive a link to session ${next} later. Open it <b>on this same device and browser</b> and your ID will be remembered automatically. Write the ID down in case you use a different device; you will be asked for it.</p>`
+           : `<p class="muted">You have completed all ${CONFIG.sessions} sessions. Thank you for taking part.</p>`}
   </section>`;
-  if (!online) $("#dlZip").onclick = downloadZip;
-  $("#newP").onclick = () => modal(`<h3>Clear this device?</h3><p class="muted">All data from this session will be removed from this browser.</p>
-    <div class="row"><button class="btn" data-x>Cancel</button><button class="btn primary grow" data-y>Clear and start over</button></div>`,
-    (root, close) => { root.querySelector("[data-x]").onclick = close; root.querySelector("[data-y]").onclick = async () => { close(); await resetAll(); }; });
+  $("#dlZip") && ($("#dlZip").onclick = downloadZip);
+  $("#copyPid").onclick = () => navigator.clipboard?.writeText(S.pid).then(() => toast("ID copied"), () => toast(S.pid));
 }
-async function resetAll() { discardTake(); await DB.clear(); S = freshState(); await save(); render(); scrollTo(0,0); }
 
 /* ---------- stop and delete (before submission only) ---------- */
-$("#withdrawBtn").onclick = () => modal(`<h3>Stop and delete your data?</h3>
-    <p class="muted">Everything you recorded and added on this device will be deleted. Nothing has been sent yet, and there is no penalty for stopping.</p>
+async function clearSession() {
+  discardTake();
+  for (const f of await sessionFiles()) await DB.delFile(f.path);
+  await DB.del(stateKey());
+}
+$("#withdrawBtn").onclick = () => modal(`<h3>Stop and delete this session?</h3>
+    <p class="muted">All recordings from this session will be deleted from this device. Nothing has been sent yet, and there is no penalty for stopping.</p>
     <div class="row"><button class="btn" data-x>Keep going</button><button class="btn danger grow" data-y>Stop and delete</button></div>`,
   (root, close) => { root.querySelector("[data-x]").onclick = close;
-    root.querySelector("[data-y]").onclick = async () => { close(); await resetAll(); toast("Stopped. Your data was deleted from this device.", 5000); }; });
+    root.querySelector("[data-y]").onclick = async () => { close(); await clearSession(); S = freshState(); await save(); render(); toast("Stopped. This session's recordings were deleted.", 5000); }; });
 
 /* ============================================================
-   UPLOAD (online mode, runs only when the participant presses Submit)
+   UPLOAD (only after the participant presses Submit)
    ============================================================ */
 let syncing = false, lastSyncError = "", retryT = 0;
 async function syncStatus() {
-  const fs = await DB.allFiles();
+  const fs = await sessionFiles();
   return { total: fs.length, sent: fs.filter(f => f.uploaded).length, pending: fs.filter(f => !f.uploaded).length };
 }
 function b64(blob) { return new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(String(r.result).split(",")[1] || ""); r.onerror = () => rej(r.error); r.readAsDataURL(blob); }); }
@@ -775,12 +820,10 @@ async function sync() {
   syncing = true; clearTimeout(retryT);
   try {
     while (true) {
-      const f = (await DB.allFiles()).find(x => !x.uploaded);
+      const f = (await sessionFiles()).find(x => !x.uploaded);
       if (!f) { lastSyncError = ""; break; }
-      try {
-        await post({op:"put", path:f.path, mime:f.mime, data: await b64(f.blob)});
-        lastSyncError = ""; f.uploaded = true; await DB.putFile(f);
-      } catch (e) { lastSyncError = navigator.onLine ? (e.message || "network error") : "offline"; retryT = setTimeout(sync, 6000); break; }
+      try { await post({op:"put", path:f.path, mime:f.mime, data: await b64(f.blob)}); lastSyncError = ""; f.uploaded = true; await DB.putFile(f); }
+      catch (e) { lastSyncError = navigator.onLine ? (e.message || "network error") : "offline"; retryT = setTimeout(sync, 6000); break; }
     }
   } finally { syncing = false; }
 }
@@ -788,12 +831,21 @@ addEventListener("online", () => sync());
 
 /* ---------- boot ---------- */
 (async () => {
-  try { S = await DB.get("state"); } catch {}
-  if (!S || S.v !== 2) { if (S) await DB.clear(); S = freshState(); await save(); }
-  if (DB.isMemory()) toast("This browser is not saving progress. Keep this tab open until you finish.", 6000);
+  if (SESSION) {
+    try { S = await DB.get(stateKey()); } catch {}
+    if (S && (S.v !== 3 || (ID && S.pid && S.pid !== ID.pid))) { await clearSession(); S = null; }
+    if (!S) {
+      S = freshState();
+      if (ID?.sessions?.[SESSION]?.submittedAt) S.step = "already";
+      else if (!ID && SESSION > 1) S.step = "identity";
+      await save();
+    }
+    if (DB.isMemory()) toast("This browser is not saving progress. Keep this tab open until you finish.", 6000);
+  }
   render();
-  if (S.submitting && S.step === "submit") submitOnline();
+  if (S?.submitting && S.step === "submit") submitOnline();
 })();
+
 </script>
 </body>
 </html>
