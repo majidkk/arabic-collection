@@ -149,6 +149,9 @@ hr.sep{border:0;border-top:1px solid var(--line);margin:4px 0;width:100%}
 .dl dd{margin:0;font-weight:500}
 .seg{flex-wrap:wrap}
 .summary b{font-size:1.1rem;overflow-wrap:anywhere}
+.tips{border-color:var(--accent);background:var(--accent-soft)}
+.tiplist{margin:0;padding-inline-start:20px;display:flex;flex-direction:column;gap:8px}
+.reminder{text-align:center;margin:-6px 0}
 </style>
 </head>
 <body>
@@ -189,14 +192,13 @@ const CONFIG = {
   minWordGap: 5,               // a word never repeats within this many prompts
   // URL of your Google Apps Script web app (see setup guide).
   // Leave "" to have participants download a ZIP instead (useful for testing).
-  submitUrl: "https://script.google.com/macros/s/AKfycbx2668Qtw3g9ftDFAazs6DHf0QkqVkJinBfSJI8UOUh6DNO212_KoPbyyj1Sp3OjT_-vw/exec",
-  submitKey: "submit_data",      // must match SUBMIT_KEY in the Apps Script
+  submitUrl: "",
+  submitKey: "change-me",      // must match SUBMIT_KEY in the Apps Script
   minAge: 15, maxAge: 99,
   maxWordSeconds: 8,
   maxSentenceSeconds: 40,
-  dialects: ["Najdi","Hijazi","Southern Saudi","Gulf (Khaleeji)","Egyptian","Levantine (Shami)","Iraqi","Yemeni","Sudanese","Maghrebi","Modern Standard Arabic only"],
   consentVersion: "2026-10 anonymous",
-  appVersion: "3.0.0"
+  appVersion: "3.1.0"
 };
 const ITEMS = [
   {id:"W01", type:"word", text:"مُسْتَشْفَى"},
@@ -474,6 +476,13 @@ function vConsent() {
   $("#main").innerHTML = `
   <div class="stack"><h2>${SESSION === 1 && !ID?.sessions?.[1] ? "Before you start" : `Welcome back: session ${SESSION}`}</h2>
     <p class="lead">This is a voice-recording session. Please read the consent information. The study is anonymous: you will not be asked for your name, student ID or signature.</p></div>
+  <section class="card stack tips" aria-label="Tips for recording">
+    <h3>Tips for good recordings</h3>
+    <ol class="tiplist">
+      <li><b>No background noise.</b> Record in a quiet room, away from TV, music, fans, traffic and other people talking.</li>
+      <li><b>Use your natural voice.</b> Speak at your normal speed and volume, the way you usually talk. Don't whisper, shout or exaggerate.</li>
+    </ol>
+  </section>
   <section class="card stack">
     <div class="consent" tabindex="0" aria-label="Consent form text">
       <h3>${esc(c.title)}</h3><p>${esc(c.intro)}</p>
@@ -504,7 +513,7 @@ function vProfile(edit = false) {
     <section class="card stack">
       <dl class="dl">
         <dt>Age</dt><dd>${P.age}</dd><dt>Gender</dt><dd>${LABEL[P.gender]}</dd><dt>Handedness</dt><dd>${LABEL[P.handedness]}</dd>
-        <dt>Native Arabic speaker</dt><dd>${LABEL[P.nativeArabic]}</dd><dt>Main dialect</dt><dd>${esc(P.dialect)}</dd>
+        <dt>Native Arabic speaker</dt><dd>${LABEL[P.nativeArabic]}</dd>
       </dl>
       <div class="row"><button class="btn" id="edit">Edit</button><button class="btn primary grow" id="ok">Correct, continue</button></div>
     </section>`;
@@ -523,20 +532,17 @@ function vProfile(edit = false) {
     </div>
     <div class="field" role="radiogroup" aria-label="Handedness"><span>Are you right- or left-handed?</span>${seg("handedness", ["right","left"])}</div>
     <div class="field" role="radiogroup" aria-label="Native language"><span>Is Arabic your native language?</span>${seg("nativeArabic", ["yes","no"])}</div>
-    <label class="field">Which Arabic dialect do you mainly speak?
-      <input type="text" id="dialect" list="dialects" autocomplete="off" placeholder="Choose or type" value="${esc(P?.dialect ?? "")}">
-      <datalist id="dialects">${CONFIG.dialects.map(d => `<option value="${esc(d)}">`).join("")}</datalist></label>
     <p class="err" id="perr" role="alert"></p>
     <button class="btn primary" id="pgo">Continue to recordings</button>
   </section>`;
   $("#pgo").onclick = () => {
     const v = n => document.querySelector(`input[name=${n}]:checked`)?.value;
-    const age = parseInt($("#age").value, 10), dialect = $("#dialect").value.trim();
+    const age = parseInt($("#age").value, 10);
     const err = !(age >= CONFIG.minAge && age <= CONFIG.maxAge) ? `Enter an age between ${CONFIG.minAge} and ${CONFIG.maxAge}.` :
       !v("gender") ? "Choose a gender." : !v("handedness") ? "Choose right- or left-handed." :
-      !v("nativeArabic") ? "Answer whether Arabic is your native language." : !dialect ? "Enter the dialect you mainly speak." : "";
+      !v("nativeArabic") ? "Answer whether Arabic is your native language." : "";
     $("#perr").textContent = err; if (err) return;
-    ID.profile = {age, gender:v("gender"), handedness:v("handedness"), nativeArabic:v("nativeArabic"), dialect, updatedAt:new Date().toISOString()};
+    ID.profile = {age, gender:v("gender"), handedness:v("handedness"), nativeArabic:v("nativeArabic"), updatedAt:new Date().toISOString()};
     Identity.save(ID); go("record");
   };
 }
@@ -571,6 +577,7 @@ function vRecord() {
     </div>
     <div class="ar ${isW ? "word" : "sent"}" lang="ar" dir="rtl">${esc(it.text)}</div>
   </section>
+  <p class="small muted reminder">Quiet room, natural voice.</p>
   <section class="card recbox">
     <button class="recbtn" id="recBtn" aria-label="Start recording"><span class="dot"></span></button>
     <div class="timer" id="timer">0.0 s</div>
@@ -685,7 +692,7 @@ function buildMeta() {
   return {
     participant_id: S.pid, session: SESSION, sessions_total: CONFIG.sessions,
     profile: { age: ID.profile.age, gender: ID.profile.gender, handedness: ID.profile.handedness,
-               native_arabic: ID.profile.nativeArabic, dialect: ID.profile.dialect },
+               native_arabic: ID.profile.nativeArabic },
     consent: { given: true, at: S.consentAt, form_version: CONFIG.consentVersion },
     started_at: S.createdAt, submitted_at: new Date().toISOString(),
     app_version: CONFIG.appVersion, audio_format: "WAV, PCM 16-bit, mono, 16 kHz",
@@ -698,9 +705,9 @@ function buildMeta() {
 function buildCsv() {
   const q = v => `"${String(v ?? "").replace(/"/g,'""')}"`;
   const P = ID.profile;
-  const rows = [["participant_id","session","position","item_id","item_type","group","repetition","folder","file","duration_sec","recorded_at","text","text_plain","age","gender","handedness","native_arabic","dialect"]];
+  const rows = [["participant_id","session","position","item_id","item_type","group","repetition","folder","file","duration_sec","recorded_at","text","text_plain","age","gender","handedness","native_arabic"]];
   S.order.forEach((p, i) => { const d = S.done[promptKey(p)], it = ITEM[p.id]; if (!d) return;
-    rows.push([S.pid, SESSION, i+1, it.id, it.type, it.group || "", p.rep, folderOf(it), fileOf(p), d.duration, d.at, it.text, plain(it.text), P.age, P.gender, P.handedness, P.nativeArabic, P.dialect]); });
+    rows.push([S.pid, SESSION, i+1, it.id, it.type, it.group || "", p.rep, folderOf(it), fileOf(p), d.duration, d.at, it.text, plain(it.text), P.age, P.gender, P.handedness, P.nativeArabic]); });
   return "﻿" + rows.map(r => r.map(q).join(",")).join("\r\n") + "\r\n";
 }
 function vSubmit() {
@@ -751,7 +758,7 @@ async function submitOnline() {
   }
   try {
     const P = ID.profile;
-    await post({op:"log", row:[new Date().toISOString(), S.pid, SESSION, doneCount(), P.age, P.gender, P.handedness, P.nativeArabic, P.dialect, CONFIG.appVersion]});
+    await post({op:"log", row:[new Date().toISOString(), S.pid, SESSION, doneCount(), P.age, P.gender, P.handedness, P.nativeArabic, CONFIG.appVersion]});
   } catch (e) { console.warn("index log failed", e); }   // files are already safe; the index row is a convenience
   await finish();
 }
