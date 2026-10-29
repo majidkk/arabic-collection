@@ -150,7 +150,7 @@ hr.sep{border:0;border-top:1px solid var(--line);margin:4px 0;width:100%}
 .seg{flex-wrap:wrap}
 .summary b{font-size:1.1rem;overflow-wrap:anywhere}
 .tips{border-color:var(--accent);background:var(--accent-soft)}
-.tiplist{margin:0;padding-inline-start:20px;display:flex;flex-direction:column;gap:8px}
+.tiplist{margin:0;padding-inline-start:20px;list-style:disc;display:flex;flex-direction:column;gap:8px}
 .reminder{text-align:center;margin:-6px 0}
 </style>
 </head>
@@ -192,13 +192,13 @@ const CONFIG = {
   minWordGap: 5,               // a word never repeats within this many prompts
   // URL of your Google Apps Script web app (see setup guide).
   // Leave "" to have participants download a ZIP instead (useful for testing).
-  submitUrl: "https://script.google.com/macros/s/AKfycbx2668Qtw3g9ftDFAazs6DHf0QkqVkJinBfSJI8UOUh6DNO212_KoPbyyj1Sp3OjT_-vw/exec",
-  submitKey: "submit_data",      // must match SUBMIT_KEY in the Apps Script
+  submitUrl: "",
+  submitKey: "change-me",      // must match SUBMIT_KEY in the Apps Script
   minAge: 15, maxAge: 99,
   maxWordSeconds: 8,
   maxSentenceSeconds: 40,
   consentVersion: "2026-10 anonymous",
-  appVersion: "3.1.0"
+  appVersion: "3.5.0"
 };
 const ITEMS = [
   {id:"W01", type:"word", text:"مُسْتَشْفَى"},
@@ -411,8 +411,8 @@ function vChooser() {
   <div class="stack"><h2>Choose your session</h2>
     <p class="lead">This study has ${CONFIG.sessions} recording sessions on different days. Open the session link you were sent, or choose it below.</p></div>
   <section class="card stack">${Array.from({length: CONFIG.sessions}, (_, i) => {
-    const n = i + 1, sub = ID?.sessions?.[n]?.submittedAt;
-    return `<div class="row" style="justify-content:space-between"><div><b>Session ${n}</b><div class="small muted">${sub ? "Submitted " + new Date(sub).toLocaleDateString() : "Not done yet"}</div></div>
+    const n = i + 1, rec = ID?.sessions?.[n], sub = rec?.submittedAt || (rec?.elsewhere ? "earlier" : null);
+    return `<div class="row" style="justify-content:space-between"><div><b>Session ${n}</b><div class="small muted">${sub ? "Submitted " + (sub === "earlier" ? "earlier" : new Date(sub).toLocaleDateString()) : "Not done yet"}</div></div>
       <a class="btn ${sub ? "" : "primary"}" href="${esc(base)}?session=${n}">Open session ${n}</a></div>`; }).join('<hr class="sep">')}
   </section>
   ${ID ? `<p class="small muted">This device remembers participant ID <b>${ID.pid}</b>.</p>` : ""}`;
@@ -446,10 +446,10 @@ function vIdentity() {
   $("#newId").onclick = () => { ID = {pid: Identity.newPid(), profile: null, sessions: {}}; Identity.save(ID); S.pid = ID.pid; go("consent"); };
 }
 function vAlready() {
-  const sub = ID.sessions[SESSION].submittedAt, next = SESSION < CONFIG.sessions ? SESSION + 1 : null;
+  const sub = ID.sessions[SESSION]?.submittedAt, next = SESSION < CONFIG.sessions ? SESSION + 1 : null;
   $("#main").innerHTML = `
   <section class="card stack"><h2>Session ${SESSION} is already done</h2>
-    <p>Participant <b>${ID.pid}</b> submitted this session on ${new Date(sub).toLocaleString()}. Thank you.</p>
+    <p>Participant <b>${ID.pid}</b> ${sub ? `submitted this session on ${new Date(sub).toLocaleString()}` : "has already submitted this session"}. Each session can be submitted only once.</p>
     ${next ? `<p class="muted">Wait for the link to session ${next}, and open it on this same device and browser.</p>` : `<p class="muted">You have finished all ${CONFIG.sessions} sessions.</p>`}
   </section>
   ${notYou()}`;
@@ -457,7 +457,7 @@ function vAlready() {
 }
 function notYou() {
   return `<section class="card stack"><h3>Not you?</h3>
-    <p class="small muted">If this device is shared, start as a different participant. The ID ${esc(ID?.pid)} will be forgotten on this device; it is not deleted from the study.</p>
+    <p class="small muted">If someone else shares this device, they should use a different browser, which gives them their own ID. Only use this button if that isn't possible: the ID ${esc(ID?.pid)} will be forgotten on this browser (it is not deleted from the study), and its owner will need to type it in for their next session.</p>
     <button class="btn" id="notYou">Start as a different participant</button></section>`;
 }
 function bindNotYou() {
@@ -476,12 +476,24 @@ function vConsent() {
   $("#main").innerHTML = `
   <div class="stack"><h2>${SESSION === 1 && !ID?.sessions?.[1] ? "Before you start" : `Welcome back: session ${SESSION}`}</h2>
     <p class="lead">This is a voice-recording session. Please read the consent information. The study is anonymous: you will not be asked for your name, student ID or signature.</p></div>
-  <section class="card stack tips" aria-label="Tips for recording">
-    <h3>Tips for good recordings</h3>
-    <ol class="tiplist">
-      <li><b>No background noise.</b> Record in a quiet room, away from TV, music, fans, traffic and other people talking.</li>
-      <li><b>Use your natural voice.</b> Speak at your normal speed and volume, the way you usually talk. Don't whisper, shout or exaggerate.</li>
-    </ol>
+  <section class="card stack tips" aria-label="Guidelines for recording">
+    <h3>Guidelines</h3>
+    <div class="stack" style="gap:6px">
+      <span class="eyebrow">Your device</span>
+      <ul class="tiplist">
+        <li><b>Preferably use a laptop or desktop computer.</b> If you use a smartphone, please use an Android phone for recording the sessions.</li>
+        <li><b>Use the same device for all your sessions.</b> Your participant ID is saved in this browser, so record sessions 1, 2 and 3 on this same device and browser.</li>
+        <li><b>Sharing a device with someone else?</b> Each person must use a different browser (for example Chrome for one person and Edge or Firefox for the other), so that each person gets their own ID.</li>
+      </ul>
+    </div>
+    <div class="stack" style="gap:6px">
+      <span class="eyebrow">Recording</span>
+      <ul class="tiplist">
+        <li><b>No background noise.</b> Record in a quiet room, away from TV, music, fans, traffic and other people talking.</li>
+        <li><b>Use your natural voice.</b> Speak at your normal speed and volume, the way you usually talk. Don't whisper, shout or exaggerate.</li>
+        <li><b>Make sure your voice is clear and audible.</b> Listen back to your first few recordings, and record again if you can't hear yourself clearly.</li>
+      </ul>
+    </div>
   </section>
   <section class="card stack">
     <div class="consent" tabindex="0" aria-label="Consent form text">
@@ -494,9 +506,14 @@ function vConsent() {
   </section>
   ${ID && Object.keys(ID.sessions || {}).length ? notYou() : ""}`;
   bindNotYou();
-  $("#cgo").onclick = () => {
+  $("#cgo").onclick = async () => {
     if (!$("#agree").checked) { $("#cerr").textContent = "Tick the box to confirm you agree."; return; }
-    if (!ID) { ID = {pid: Identity.newPid(), profile: null, sessions: {}}; Identity.save(ID); }
+    if (ID) {   // returning ID: make sure this session wasn't already submitted from another device
+      $("#cgo").disabled = true;
+      const done = await serverSubmitted(ID.pid);
+      $("#cgo").disabled = false;
+      if (done) return markAlreadySubmitted();
+    } else { ID = {pid: Identity.newPid(), profile: null, sessions: {}}; Identity.save(ID); }
     S.pid = ID.pid; S.consentAt = new Date().toISOString(); go("profile");
   };
 }
@@ -552,14 +569,73 @@ function vProfile(edit = false) {
    ============================================================ */
 const R = { stream:null, ctx:null, analyser:null, mr:null, chunks:[], t0:0, timer:0, auto:0, raf:0, take:null, url:null, busy:false, starting:false };
 function stopMeter() { cancelAnimationFrame(R.raf); clearInterval(R.timer); clearTimeout(R.auto); }
+// iPhone/iPad (including iPadOS, which reports itself as a Mac).
+const IS_IOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (/Macintosh/.test(navigator.userAgent) && navigator.maxTouchPoints > 1);
+
+/* Device type, OS and browser for each recording. The plain user-agent text is frozen by modern browsers
+   (Chrome on Android always says "Android 10", Windows 11 says "Windows NT 10.0", macOS says 10.15.7), so
+   Chrome/Edge's detailed client hints are used when available, and on iPhone/iPad the Safari version
+   (which matches the iOS version) is used. `os_version_source` records where the version came from. */
+let DEVICE = null;
+async function getDevice() {
+  if (DEVICE) return DEVICE;
+  const ua = navigator.userAgent, m = re => (ua.match(re) || [])[1];
+  const d = { device_type: "desktop", os: "unknown", os_version: "", os_version_source: "user-agent", device_model: "", browser: "unknown", browser_version: "" };
+  if (/iPhone|iPod/.test(ua)) { d.device_type = "iphone"; d.os = "iOS"; }
+  else if (IS_IOS) { d.device_type = "ipad"; d.os = "iPadOS"; }
+  else if (/Android/.test(ua)) { d.device_type = "android"; d.os = "Android"; d.os_version = m(/Android (\d+(?:\.\d+)*)/) || ""; d.device_model = m(/Android [^;)]*; ([^;)]+?)(?: Build|\))/) || ""; }
+  else if (/Windows/.test(ua)) { d.os = "Windows"; d.os_version = m(/Windows NT (\d+\.\d+)/) || ""; }
+  else if (/Mac OS X|Macintosh/.test(ua)) { d.os = "macOS"; d.os_version = (m(/Mac OS X (\d+[._]\d+(?:[._]\d+)?)/) || "").replace(/_/g, "."); }
+  else if (/CrOS/.test(ua)) { d.os = "ChromeOS"; }
+  else if (/Linux/.test(ua)) { d.os = "Linux"; }
+  if (IS_IOS) {
+    const ios = (m(/OS (\d+(?:_\d+)*) like Mac/) || "").replace(/_/g, "."), safari = m(/Version\/(\d+(?:\.\d+)*)/);
+    // Safari's version tracks the iOS version and, unlike the OS field, is not frozen.
+    if (safari && (!ios || parseFloat(safari) >= parseFloat(ios))) { d.os_version = safari; d.os_version_source = "safari-version"; }
+    else d.os_version = ios;
+  }
+  // Values that browsers report for every version of the OS: mark them so they are not mistaken for real versions.
+  if (d.os_version_source === "user-agent" && ((d.os === "macOS" && d.os_version === "10.15.7") || (d.os === "Windows" && d.os_version === "10.0") || (d.os === "Android" && d.os_version === "10" && /Android 10; K\)/.test(ua))))
+    d.os_version_source = "user-agent-frozen";
+  const b = /EdgA?\/([\d.]+)/.exec(ua) ? ["Edge", m(/EdgA?\/([\d.]+)/)] : /SamsungBrowser\/([\d.]+)/.test(ua) ? ["Samsung Internet", m(/SamsungBrowser\/([\d.]+)/)]
+          : /CriOS\/([\d.]+)/.test(ua) ? ["Chrome", m(/CriOS\/([\d.]+)/)] : /FxiOS\/([\d.]+)/.test(ua) ? ["Firefox", m(/FxiOS\/([\d.]+)/)]
+          : /Firefox\/([\d.]+)/.test(ua) ? ["Firefox", m(/Firefox\/([\d.]+)/)] : /Chrome\/([\d.]+)/.test(ua) ? ["Chrome", m(/Chrome\/([\d.]+)/)]
+          : /Version\/([\d.]+).*Safari/.test(ua) ? ["Safari", m(/Version\/([\d.]+)/)] : ["unknown", ""];
+  [d.browser, d.browser_version] = b;
+  try {
+    // iPhone/iPad browsers are all WebKit; their version comes from Safari, never from Chromium hints.
+    const h = !IS_IOS && navigator.userAgentData && await navigator.userAgentData.getHighEntropyValues(["platform", "platformVersion", "model", "fullVersionList"]);
+    if (h) {
+      const plat = { "Android":["android","Android"], "Windows":["desktop","Windows"], "macOS":["desktop","macOS"], "Chrome OS":["desktop","ChromeOS"], "Linux":["desktop","Linux"] }[h.platform];
+      if (plat && plat[1] !== d.os) { [d.device_type, d.os] = plat; d.os_version = ""; }   // e.g. Android in "desktop site" mode
+      if (h.platformVersion && d.os !== "unknown" && d.os !== "Linux") {
+        d.os_version_source = "client-hints";
+        if (d.os === "Windows") { const maj = parseInt(h.platformVersion, 10); d.os_version = maj >= 13 ? "11" : maj > 0 ? "10" : h.platformVersion; d.os_build = h.platformVersion; }
+        else d.os_version = h.platformVersion;
+      }
+      if (h.model) d.device_model = h.model;
+      const fv = (h.fullVersionList || []).find(x => /Chrome|Edge|Opera|Samsung/.test(x.brand) && !/Not/.test(x.brand));
+      if (fv && (d.browser === "Chrome" || d.browser === "Edge")) d.browser_version = fv.version;
+    }
+  } catch {}
+  return DEVICE = d;
+}
+getDevice();
 async function ensureMic() {
   if (R.stream && R.stream.active) return;
   if (!navigator.mediaDevices?.getUserMedia) throw new Error(location.protocol === "http:" ? "This page must be opened over https:// to use the microphone." : "This browser cannot record audio. Use a recent Chrome, Edge, Firefox or Safari.");
-  R.stream = await navigator.mediaDevices.getUserMedia({audio:{channelCount:1, echoCancellation:false, noiseSuppression:false, autoGainControl:true}});
+  // On iOS, turning off echo cancellation switches the mic to a raw mode with no gain, which records
+  // very quietly. iOS therefore keeps Apple's standard voice processing; other platforms record unprocessed.
+  const audio = IS_IOS ? true : {channelCount:1, echoCancellation:false, noiseSuppression:false, autoGainControl:true};
+  R.stream = await navigator.mediaDevices.getUserMedia({audio});
+  try { R.mic = {requested: IS_IOS ? "browser defaults (iOS)" : "echoCancellation:false, noiseSuppression:false, autoGainControl:true", settings: R.stream.getAudioTracks()[0].getSettings()}; } catch {}
   R.ctx = R.ctx || new (window.AudioContext || window.webkitAudioContext)();
   R.analyser = R.ctx.createAnalyser(); R.analyser.fftSize = 1024;
   R.ctx.createMediaStreamSource(R.stream).connect(R.analyser);
 }
+// While the microphone is open, iOS plays sound through the quiet earpiece instead of the loudspeaker.
+// Releasing it after each take lets the playback be heard properly.
+function releaseMic() { if (R.stream) { R.stream.getTracks().forEach(t => t.stop()); R.stream = null; } }
 function vRecord() {
   if (!S.order) { S.order = buildOrder(); S.idx = 0; save(); }
   const dc = doneCount();
@@ -634,12 +710,15 @@ async function toggleRec() {
 }
 async function onRecStop() {
   stopMeter(); R.busy = true;
+  if (IS_IOS) releaseMic();
   const btn = $("#recBtn"); if (btn) { btn.classList.remove("on"); btn.disabled = true; btn.setAttribute("aria-label","Start recording"); }
   const m = $("#meter"); if (m) m.style.width = "0";
   try {
-    const {wav, duration, peak} = await toWav16k(new Blob(R.chunks, {type: R.mr.mimeType || "audio/webm"}));
+    const dev = await getDevice(), pr = S.order[S.idx];
+    const info = `participant=${S.pid}; session=${SESSION}; item=${pr.id}; repetition=${pr.rep}; device=${dev.device_type}; os=${dev.os} ${dev.os_version}; model=${dev.device_model || "-"}; browser=${dev.browser} ${dev.browser_version}; recorded=${new Date().toISOString()}`;
+    const {wav, duration, peak, rms} = await toWav16k(new Blob(R.chunks, {type: R.mr.mimeType || "audio/webm"}), info);
     if (duration < 0.25) throw new Error("That recording was too short. Try again.");
-    R.take = {wav, duration, peak, at:new Date().toISOString()}; R.url = URL.createObjectURL(wav);
+    R.take = {wav, duration, peak, rms, at:new Date().toISOString()}; R.url = URL.createObjectURL(wav);
     showReview();
   } catch (e) { const er = $("#rerr"); if (er) er.textContent = e.message || "Recording failed. Try again."; }
   finally { R.busy = false; if (btn) btn.disabled = false; }
@@ -654,7 +733,8 @@ async function saveTake() {
   const p = S.order[S.idx];
   try {
     await DB.putFile({path: audioPath(p), session: SESSION, blob: R.take.wav, mime:"audio/wav", uploaded:false});
-    S.done[promptKey(p)] = {duration: +R.take.duration.toFixed(3), at: R.take.at, position: S.idx + 1};
+    const db = v => v > 0 ? +(20 * Math.log10(v)).toFixed(1) : -120;
+    S.done[promptKey(p)] = {duration: +R.take.duration.toFixed(3), at: R.take.at, position: S.idx + 1, peak_dbfs: db(R.take.peak), rms_dbfs: db(R.take.rms), device: await getDevice()};
     discardTake();
     const nextNew = S.order.findIndex((q, i) => i > S.idx && !S.done[promptKey(q)]);
     S.idx = nextNew >= 0 ? nextNew : S.order.findIndex(q => !S.done[promptKey(q)]);
@@ -664,20 +744,30 @@ async function saveTake() {
   R.busy = false;
   if (S.idx >= S.order.length) { toast("All recordings done."); go("submit"); } else vRecord();
 }
-async function toWav16k(blob) {
+async function toWav16k(blob, info = "") {
   const ab = await blob.arrayBuffer();
   const audio = await new Promise((res, rej) => { const p = R.ctx.decodeAudioData(ab, res, rej); if (p && p.then) p.then(res, rej); });
   const rate = 16000, len = Math.max(1, Math.ceil(audio.duration * rate));
   const off = new OfflineAudioContext(1, len, rate); const src = off.createBufferSource();
   src.buffer = audio; src.connect(off.destination); src.start();
   const out = (await off.startRendering()).getChannelData(0);
-  let peak = 0; for (const v of out) peak = Math.max(peak, Math.abs(v));
+  let peak = 0, sq = 0; for (const v of out) { peak = Math.max(peak, Math.abs(v)); sq += v * v; }
+  const rms = Math.sqrt(sq / out.length);
   const dv = new DataView(new ArrayBuffer(44 + out.length * 2)), w = (o, s) => [...s].forEach((c,i)=>dv.setUint8(o+i,c.charCodeAt(0)));
   w(0,"RIFF"); dv.setUint32(4, 36 + out.length*2, true); w(8,"WAVE"); w(12,"fmt "); dv.setUint32(16,16,true); dv.setUint16(20,1,true);
   dv.setUint16(22,1,true); dv.setUint32(24,rate,true); dv.setUint32(28,rate*2,true); dv.setUint16(32,2,true); dv.setUint16(34,16,true);
   w(36,"data"); dv.setUint32(40, out.length*2, true);
   for (let i=0;i<out.length;i++){ const s = Math.max(-1, Math.min(1, out[i])); dv.setInt16(44+i*2, s<0 ? s*0x8000 : s*0x7FFF, true); }
-  return {wav: new Blob([dv], {type:"audio/wav"}), duration: out.length / rate, peak};
+  // RIFF LIST/INFO chunk (ISFT = software, ICMT = comment) so each file carries its own description.
+  const sub = (id, txt) => { let b = [...new TextEncoder().encode(txt.replace(/[^\x20-\x7E]/g, "?")), 0]; if (b.length % 2) b.push(0);
+    const a = new Uint8Array(8 + b.length), v = new DataView(a.buffer); [...id].forEach((c,i)=>a[i]=c.charCodeAt(0)); v.setUint32(4, b.length, true); a.set(b, 8); return a; };
+  const subs = [sub("ISFT", `Arabic Voice Collection ${CONFIG.appVersion}`), sub("ICMT", info)];
+  const listLen = 4 + subs.reduce((n, x) => n + x.length, 0), list = new Uint8Array(8 + listLen), lv = new DataView(list.buffer);
+  [..."LIST"].forEach((c,i)=>list[i]=c.charCodeAt(0)); lv.setUint32(4, listLen, true); [..."INFO"].forEach((c,i)=>list[8+i]=c.charCodeAt(0));
+  let off2 = 12; for (const x of subs) { list.set(x, off2); off2 += x.length; }
+  dv.setUint32(4, 36 + out.length*2 + (out.length*2 % 2) + list.length, true);
+  const parts = [dv]; if (out.length*2 % 2) parts.push(new Uint8Array(1)); parts.push(list);
+  return {wav: new Blob(parts, {type:"audio/wav"}), duration: out.length / rate, peak, rms};
 }
 document.addEventListener("keydown", e => {
   if (S?.step !== "record" || e.target.closest("input,textarea,select,button,audio,a")) return;
@@ -699,15 +789,15 @@ function buildMeta() {
     reps: { word: CONFIG.wordReps, sentence: CONFIG.sentenceReps }, recordings: doneCount(),
     items: ITEMS.map(it => ({...it, text_plain: plain(it.text), folder: folderOf(it)})),
     prompt_order: S.order.map((p, i) => ({position: i + 1, item_id: p.id, repetition: p.rep})),
-    device: { userAgent: navigator.userAgent, language: navigator.language }
+    device: { ...(DEVICE || {}), userAgent: navigator.userAgent, language: navigator.language, ios: IS_IOS, microphone: R.mic || null }
   };
 }
 function buildCsv() {
   const q = v => `"${String(v ?? "").replace(/"/g,'""')}"`;
   const P = ID.profile;
-  const rows = [["participant_id","session","position","item_id","item_type","group","repetition","folder","file","duration_sec","recorded_at","text","text_plain","age","gender","handedness","native_arabic"]];
+  const rows = [["participant_id","session","position","item_id","item_type","group","repetition","folder","file","duration_sec","peak_dbfs","rms_dbfs","recorded_at","device_type","os","os_version","os_version_source","device_model","browser","browser_version","text","text_plain","age","gender","handedness","native_arabic"]];
   S.order.forEach((p, i) => { const d = S.done[promptKey(p)], it = ITEM[p.id]; if (!d) return;
-    rows.push([S.pid, SESSION, i+1, it.id, it.type, it.group || "", p.rep, folderOf(it), fileOf(p), d.duration, d.at, it.text, plain(it.text), P.age, P.gender, P.handedness, P.nativeArabic]); });
+    rows.push([S.pid, SESSION, i+1, it.id, it.type, it.group || "", p.rep, folderOf(it), fileOf(p), d.duration, d.peak_dbfs ?? "", d.rms_dbfs ?? "", d.at, ...(dv => [dv.device_type, dv.os, dv.os_version, dv.os_version_source, dv.device_model, dv.browser, dv.browser_version])(d.device || DEVICE || {}), it.text, plain(it.text), P.age, P.gender, P.handedness, P.nativeArabic]); });
   return "﻿" + rows.map(r => r.map(q).join(",")).join("\r\n") + "\r\n";
 }
 function vSubmit() {
@@ -742,10 +832,15 @@ async function writeManifest() {
 async function submitOnline() {
   const btn = $("#subBtn"); btn.disabled = true; $("#back").disabled = true; btn.textContent = "Submitting…";
   $("#subProg").hidden = false; $("#serr").textContent = "";
+  if (!S.subId) S.subId = [...crypto.getRandomValues(new Uint8Array(8))].map(x => x.toString(16).padStart(2, "0")).join("");
   S.submitting = true; await save(); renderChrome();
-  if (!S.manifest) { await writeManifest(); S.manifest = true; await save(); }
-  const start = Date.now();
+  if (!S.manifest) {
+    if (await serverSubmitted(S.pid)) return markAlreadySubmitted();
+    await writeManifest(); S.manifest = true; await save();
+  }
+  const start = Date.now(); rejected = false;
   while (true) {
+    if (rejected) return markAlreadySubmitted();
     const st = await syncStatus();
     $("#subBar").style.width = (st.total ? st.sent / st.total * 100 : 100) + "%";
     $("#subTxt").textContent = `Sent ${st.sent} of ${st.total} files${lastSyncError ? " · retrying (" + lastSyncError + ")" : ""}. Keep this page open.`;
@@ -758,7 +853,7 @@ async function submitOnline() {
   }
   try {
     const P = ID.profile;
-    await post({op:"log", row:[new Date().toISOString(), S.pid, SESSION, doneCount(), P.age, P.gender, P.handedness, P.nativeArabic, CONFIG.appVersion]});
+    await post({op:"log", row:[new Date().toISOString(), S.pid, SESSION, doneCount(), P.age, P.gender, P.handedness, P.nativeArabic, CONFIG.appVersion, ...(dv => [dv.device_type, dv.os, dv.os_version, dv.device_model, dv.browser])(await getDevice())]});
   } catch (e) { console.warn("index log failed", e); }   // files are already safe; the index row is a convenience
   await finish();
 }
@@ -818,19 +913,34 @@ async function syncStatus() {
 }
 function b64(blob) { return new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(String(r.result).split(",")[1] || ""); r.onerror = () => rej(r.error); r.readAsDataURL(blob); }); }
 async function post(body) {
-  const r = await fetch(CONFIG.submitUrl, {method:"POST", body: JSON.stringify({key: CONFIG.submitKey, ...body})});
+  const r = await fetch(CONFIG.submitUrl, {method:"POST", body: JSON.stringify({key: CONFIG.submitKey, sub: S?.subId, ...body})});
   const j = await r.json().catch(() => ({ok:false, error:"unexpected server response"}));
-  if (!j.ok) throw new Error(j.error || "upload failed");
+  if (!j.ok) throw Object.assign(new Error(j.error || "upload failed"), {code: j.code});
+  return j;
+}
+// Has this participant already submitted this session (from any device)? null = couldn't check.
+async function serverSubmitted(pid) {
+  if (S.mode !== "online") return null;
+  try { return !!(await post({op:"check", pid, session: SESSION})).submitted; } catch { return null; }
+}
+let rejected = false;
+async function markAlreadySubmitted() {
+  ID.sessions = ID.sessions || {}; ID.sessions[SESSION] = {submittedAt: ID.sessions[SESSION]?.submittedAt || null, elsewhere: true}; Identity.save(ID);
+  await clearSession(); S = freshState(); S.step = "already"; await save(); render(); scrollTo(0,0);
 }
 async function sync() {
   if (S?.mode !== "online" || !S.submitting || syncing) return;
   syncing = true; clearTimeout(retryT);
   try {
     while (true) {
-      const f = (await sessionFiles()).find(x => !x.uploaded);
+      const pending = (await sessionFiles()).filter(x => !x.uploaded), rank = x => /_metadata\.json$/.test(x.path) ? 2 : /_recordings\.csv$/.test(x.path) ? 1 : 0;
+      const f = pending.sort((a, b) => rank(a) - rank(b))[0];
       if (!f) { lastSyncError = ""; break; }
       try { await post({op:"put", path:f.path, mime:f.mime, data: await b64(f.blob)}); lastSyncError = ""; f.uploaded = true; await DB.putFile(f); }
-      catch (e) { lastSyncError = navigator.onLine ? (e.message || "network error") : "offline"; retryT = setTimeout(sync, 6000); break; }
+      catch (e) {
+        if (e.code === "already_submitted") { rejected = true; break; }
+        lastSyncError = navigator.onLine ? (e.message || "network error") : "offline"; retryT = setTimeout(sync, 6000); break;
+      }
     }
   } finally { syncing = false; }
 }
@@ -843,7 +953,7 @@ addEventListener("online", () => sync());
     if (S && (S.v !== 3 || (ID && S.pid && S.pid !== ID.pid))) { await clearSession(); S = null; }
     if (!S) {
       S = freshState();
-      if (ID?.sessions?.[SESSION]?.submittedAt) S.step = "already";
+      if (ID?.sessions?.[SESSION]) S.step = "already";
       else if (!ID && SESSION > 1) S.step = "identity";
       await save();
     }
