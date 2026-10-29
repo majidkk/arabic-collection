@@ -192,13 +192,13 @@ const CONFIG = {
   minWordGap: 5,               // a word never repeats within this many prompts
   // URL of your Google Apps Script web app (see setup guide).
   // Leave "" to have participants download a ZIP instead (useful for testing).
-  submitUrl: "https://script.google.com/macros/s/AKfycbx2668Qtw3g9ftDFAazs6DHf0QkqVkJinBfSJI8UOUh6DNO212_KoPbyyj1Sp3OjT_-vw/exec",
-  submitKey: "submit_data",      // must match SUBMIT_KEY in the Apps Script
+  submitUrl: "",
+  submitKey: "change-me",      // must match SUBMIT_KEY in the Apps Script
   minAge: 15, maxAge: 99,
   maxWordSeconds: 8,
   maxSentenceSeconds: 40,
   consentVersion: "2026-10 anonymous",
-  appVersion: "3.6.0"
+  appVersion: "3.6.1"
 };
 const ITEMS = [
   {id:"W01", type:"word", text:"مُسْتَشْفَى"},
@@ -451,22 +451,9 @@ function vAlready() {
   <section class="card stack"><h2>Session ${SESSION} is already done</h2>
     <p>Participant <b>${ID.pid}</b> ${sub ? `submitted this session on ${new Date(sub).toLocaleString()}` : "has already submitted this session"}. Each session can be submitted only once.</p>
     ${next ? `<p class="muted">Wait for the link to session ${next}, and open it on this same device and browser.</p>` : `<p class="muted">You have finished all ${CONFIG.sessions} sessions.</p>`}
-  </section>
-  ${notYou()}`;
-  bindNotYou();
+  </section>`;
 }
-function notYou() {
-  return `<section class="card stack"><h3>Not you?</h3>
-    <p class="small muted">If someone else shares this device, they should use a different browser, which gives them their own ID. Only use this button if that isn't possible: the ID ${esc(ID?.pid)} will be forgotten on this browser (it is not deleted from the study), and its owner will need to type it in for their next session.</p>
-    <button class="btn" id="notYou">Start as a different participant</button></section>`;
-}
-function bindNotYou() {
-  $("#notYou") && ($("#notYou").onclick = () => modal(`<h3>Start as a different participant?</h3>
-    <p class="muted">This device will forget ID <b>${esc(ID.pid)}</b> and any unsubmitted recordings for this session.</p>
-    <div class="row"><button class="btn" data-x>Cancel</button><button class="btn primary grow" data-y>Start fresh</button></div>`,
-    (root, close) => { root.querySelector("[data-x]").onclick = close; root.querySelector("[data-y]").onclick = async () => {
-      close(); await clearSession(); Identity.forget(); ID = null; S = freshState(); S.step = SESSION > 1 ? "identity" : "consent"; await save(); render(); }; }));
-}
+
 
 /* ============================================================
    STEP 1 — CONSENT (every session; no name, ID or signature)
@@ -503,9 +490,7 @@ function vConsent() {
     <label class="check"><input type="checkbox" id="agree"> <span>${esc(c.agree)}</span></label>
     <p class="err" id="cerr" role="alert"></p>
     <button class="btn primary" id="cgo">I agree, continue</button>
-  </section>
-  ${ID && Object.keys(ID.sessions || {}).length ? notYou() : ""}`;
-  bindNotYou();
+  </section>`;
   $("#cgo").onclick = async () => {
     if (!$("#agree").checked) { $("#cerr").textContent = "Tick the box to confirm you agree."; return; }
     if (ID) {   // returning ID: make sure this session wasn't already submitted from another device
